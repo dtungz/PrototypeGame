@@ -1,0 +1,822 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Hộp Cơm Việt–Hàn · Prototype</title>
+<style>
+  :root{
+    --bg:#fbf1e4; --frame:#b5506a; --frameDark:#7e2f45; --frameLight:#c96a82; --empty:#8f3a52;
+    --ink:#3a2a22; --muted:#8d7666; --page:#fffdf8; --ok:#3aa76d; --bad:#d6453a;
+    --wood:#c89462; --woodTop:#ddb07f; --woodDark:#9c6b3f; --slot:#b07c4c;
+    --gap:3px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; height:100%; color:var(--ink); overflow:hidden;
+    font-family:"Nunito","Segoe UI",system-ui,-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif}
+  body{background:var(--bg); transition:background .4s}
+  #app{max-width:440px; height:100%; margin:0 auto; display:flex; flex-direction:column; padding:12px 16px 10px; gap:10px; user-select:none}
+
+  /* ---------- Sổ công thức ---------- */
+  .book{display:flex; justify-content:center; flex:none; filter:drop-shadow(0 4px 0 var(--frameDark))}
+  .page{background:var(--page); border:3px solid var(--frameDark); height:128px; position:relative}
+  .page.left{width:46%; border-radius:12px 4px 4px 12px; border-right-width:1.5px; display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:12px; align-content:center}
+  .page.right{width:46%; border-radius:4px 12px 12px 4px; border-left-width:1.5px; display:flex; align-items:center; justify-content:center}
+  .rings{position:absolute; right:-9px; top:14px; bottom:14px; display:flex; flex-direction:column; justify-content:space-between; z-index:2}
+  .rings i{display:block; width:16px; height:7px; border-radius:4px; background:#cfc6bb; border:1.5px solid #8f857a}
+  .pbtn{border:0; background:#f1ebe2; border-radius:10px; height:44px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink); padding:0}
+  .pbtn svg{width:24px; height:24px}
+  .pbtn:active{transform:scale(.94)}
+  .pbtn:disabled{opacity:.35}
+  .lvl{display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px}
+  .targetwrap{background:color-mix(in srgb, var(--frame) 18%, #fff); padding:6px; border-radius:6px}
+  .hintbtn{position:absolute; top:5px; right:5px; width:30px; height:30px; border-radius:50%; border:2px dashed #d9cfc2; background:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:14px; cursor:pointer; padding:0}
+  .hintbtn b{position:absolute; bottom:-6px; right:-6px; background:var(--frame); color:#fff; font-size:10px; border-radius:8px; min-width:16px; height:16px; line-height:16px}
+
+  /* ---------- Hộp bento ---------- */
+  .boxarea{flex:1 1 0; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px}
+  .bento{position:relative; padding:12px 12px 0; border-radius:8px 8px 4px 4px;
+    background:
+      repeating-linear-gradient(45deg, transparent 0 6px, rgba(255,255,255,.08) 6px 12px),
+      repeating-linear-gradient(-45deg, transparent 0 6px, rgba(0,0,0,.06) 6px 12px), var(--frame);
+    box-shadow:0 10px 18px rgba(60,30,20,.18)}
+  .bento .lip{height:26px; margin:10px -12px 0; border-radius:0 0 4px 4px;
+    background:
+      repeating-linear-gradient(60deg, transparent 0 7px, rgba(255,255,255,.12) 7px 9px),
+      repeating-linear-gradient(-60deg, transparent 0 7px, rgba(255,255,255,.12) 7px 9px), var(--frameDark)}
+  #box{position:relative; display:grid; gap:var(--gap); background:var(--empty); padding:var(--gap); border-radius:4px; box-shadow:inset 0 3px 6px rgba(0,0,0,.25)}
+  .bcell{position:relative; border-radius:5px; touch-action:none; background:color-mix(in srgb, var(--empty) 88%, #fff); box-shadow:inset 0 2px 4px rgba(0,0,0,.25)}
+  .bcell .tile{position:absolute; inset:0}
+  .bcell.top{box-shadow:0 0 0 2px #fff, 0 4px 10px rgba(0,0,0,.35); z-index:1}
+  .bcell.top:after{content:""; position:absolute; inset:3px; border:2px dashed rgba(255,255,255,.95); border-radius:4px; pointer-events:none}
+  .badge{position:absolute; right:3px; bottom:3px; background:rgba(30,20,15,.7); color:#fff; font-size:10px; font-weight:800;
+    min-width:16px; height:16px; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:0 4px; pointer-events:none}
+  #overlay{position:absolute; inset:0; pointer-events:none}
+  .gcell{position:absolute; border-radius:5px}
+  .gcell .tile{opacity:.7}
+  .gcell.ok{outline:3px solid #fff; outline-offset:-3px; box-shadow:0 0 0 2px var(--ok)}
+  .gcell.bad{background:rgba(214,69,58,.45); outline:3px solid var(--bad); outline-offset:-3px}
+  .gcell.fusion{outline:3px solid #ffd23f; outline-offset:-3px; box-shadow:0 0 16px 4px rgba(255,200,40,.9); animation:glow .6s ease-in-out infinite alternate}
+  .gcell.fusion .tile{opacity:.95}
+  .gcell.gone{outline:3px dashed #ffe066; outline-offset:-3px; background:rgba(255,230,100,.25)}
+  .gcell.gone:after{content:"↑"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:900; color:#fff; text-shadow:0 1px 3px #000}
+  .gcell.idle{outline:2px dashed rgba(255,255,255,.6); outline-offset:-3px}
+  .gcell.hint{outline:3px solid #6fc3ff; outline-offset:-3px; box-shadow:0 0 14px 3px rgba(80,170,255,.8); animation:glow .7s ease-in-out infinite alternate}
+  @keyframes glow{from{filter:brightness(1)} to{filter:brightness(1.25)}}
+  .tip{font-size:12px; color:var(--muted); text-align:center; min-height:16px; padding:0 8px; line-height:1.35}
+  .tip b{color:var(--frameDark)}
+
+  /* ---------- Ô nguyên liệu ---------- */
+  .tile{display:block; width:100%; height:100%; border-radius:5px; overflow:hidden; box-shadow:inset 0 -3px 0 rgba(0,0,0,.12)}
+  .tile svg{width:100%; height:100%; display:block}
+
+  /* ---------- Khay gỗ ---------- */
+  .tray{flex:none; position:relative; padding:10px 10px 12px; border-radius:16px 16px 10px 10px;
+    background:linear-gradient(var(--woodTop) 0 12px, var(--wood) 12px); box-shadow:0 5px 0 var(--woodDark)}
+  .tray:before,.tray:after{content:""; position:absolute; bottom:-16px; width:16px; height:14px; background:var(--woodDark); border-radius:0 0 4px 4px}
+  .tray:before{left:22px} .tray:after{right:22px}
+  #hand{display:flex; gap:8px; justify-content:center}
+  .slot{flex:1; max-width:80px; aspect-ratio:1/1.08; border-radius:10px; background:var(--slot);
+    box-shadow:inset 0 3px 6px rgba(60,30,10,.35); display:flex; align-items:center; justify-content:center; position:relative}
+  .slot.empty:after{content:""; width:30%; height:30%; border-radius:4px; background:rgba(0,0,0,.08)}
+  .piece{position:relative; touch-action:none; cursor:grab; transition:transform .18s ease, opacity .15s; filter:drop-shadow(0 2px 0 rgba(60,30,10,.35))}
+  .piece.ghosted{opacity:.2}
+  .piece.spin{transform:rotate(90deg)}
+  .piece.pulse{animation:pulse .8s ease-in-out infinite}
+  .piece.pop{animation:pop .45s ease-out}
+  @keyframes pulse{50%{transform:scale(1.12); filter:drop-shadow(0 0 6px #6fc3ff) drop-shadow(0 0 2px #6fc3ff)}}
+  @keyframes pop{0%{transform:scale(.3)} 70%{transform:scale(1.15)} 100%{transform:scale(1)}}
+  .pgrid{display:grid}
+  .pcell{position:relative}
+  .lock{position:absolute; top:-7px; right:-7px; width:17px; height:17px; border-radius:50%; background:#fff; border:2px solid var(--bad);
+    color:var(--bad); font-size:11px; font-weight:900; line-height:13px; text-align:center; z-index:2}
+  .fillmark{position:absolute; inset:0; border-radius:5px; border:2px dashed rgba(255,255,255,.9); pointer-events:none}
+  .fillicon{position:absolute; left:-7px; bottom:-7px; width:18px; height:18px; border-radius:50%; background:#fff; z-index:2; display:flex; align-items:center; justify-content:center; box-shadow:0 1px 2px rgba(0,0,0,.3)}
+  .fillicon svg{width:12px; height:12px}
+  .rulebar{font-size:11px; color:var(--muted); text-align:center; margin-top:10px}
+
+  /* ---------- Kéo thả, popup ---------- */
+  #float{position:fixed; left:0; top:0; pointer-events:none; z-index:50; filter:drop-shadow(0 10px 12px rgba(0,0,0,.3)); opacity:.92; display:none}
+  #float .piece{filter:none}
+  #float.bad{opacity:.7}
+  #float.over{opacity:.45}
+  #layers{position:fixed; z-index:60; background:#fff; border-radius:12px; padding:8px 10px; box-shadow:0 8px 24px rgba(0,0,0,.25); font-size:12px; min-width:150px; display:none}
+  #layers h4{margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:700}
+  #layers .row{display:flex; align-items:center; gap:8px; padding:3px 0}
+  #layers .row .tile{width:26px; height:26px; flex:none}
+  #layers .row.top b{color:var(--frame)}
+  #toast{position:fixed; left:50%; bottom:26%; transform:translate(-50%,20px); background:rgba(45,30,20,.92); color:#fff; padding:10px 16px; border-radius:20px;
+    font-size:13px; opacity:0; transition:.25s; z-index:70; max-width:88%; text-align:center; pointer-events:none}
+  #toast.show{opacity:1; transform:translate(-50%,0)}
+  .fxname{position:fixed; z-index:65; pointer-events:none; background:#fff; border:2px solid #ffd23f; border-radius:14px; padding:4px 10px; font-weight:800; font-size:13px;
+    white-space:nowrap; transform:translate(-50%,-50%); animation:floatup 1.3s ease-out forwards; box-shadow:0 4px 12px rgba(0,0,0,.2)}
+  .fxname small{color:#e0533a; margin-left:4px}
+  @keyframes floatup{0%{opacity:0; transform:translate(-50%,-30%) scale(.6)} 15%{opacity:1; transform:translate(-50%,-60%) scale(1.05)} 80%{opacity:1} 100%{opacity:0; transform:translate(-50%,-140%)}}
+  .spark{position:fixed; z-index:64; width:8px; height:8px; border-radius:50%; pointer-events:none; animation:spark .6s ease-out forwards}
+  @keyframes spark{to{transform:translate(var(--dx),var(--dy)) scale(.2); opacity:0}}
+  .shake{animation:shake .35s}
+  @keyframes shake{25%{transform:translateX(-5px)} 75%{transform:translateX(5px)}}
+
+  /* ---------- Overlay: thắng / chọn màn ---------- */
+  .modal{position:fixed; inset:0; background:rgba(40,25,15,.5); display:none; align-items:center; justify-content:center; z-index:80; padding:16px}
+  .modal.show{display:flex}
+  .sheet{width:100%; max-width:360px; background:var(--page); border:3px solid var(--frameDark); border-radius:16px; padding:18px 16px; text-align:center;
+    box-shadow:0 6px 0 var(--frameDark), 0 20px 40px rgba(0,0,0,.3); animation:pop .45s ease-out}
+  .sheet h2{margin:0; font-size:22px}
+  .sheet .ko{color:var(--muted); font-size:13px; margin-top:2px}
+  .sheet .mini{display:inline-block; margin:14px 0 10px; animation:slide .6s ease-out}
+  @keyframes slide{from{transform:translateY(-30px) rotate(-6deg); opacity:0}}
+  .quote{background:var(--bg); border-radius:12px; padding:8px 12px; font-size:13.5px; line-height:1.4}
+  .btns{display:flex; gap:8px; justify-content:center; margin-top:14px}
+  .btns button,.lvlist button{border:0; font:inherit; font-weight:800; padding:11px 18px; border-radius:12px; cursor:pointer}
+  .btn1{background:var(--frame); color:#fff; box-shadow:0 3px 0 var(--frameDark)}
+  .btn2{background:#efe7dc; color:var(--ink); box-shadow:0 3px 0 #d3c6b5}
+  .lvlist{display:flex; flex-direction:column; gap:8px; margin-top:12px; text-align:left}
+  .lvlist button{display:flex; align-items:center; gap:10px; background:#f4eee6; box-shadow:0 3px 0 #ddd0bf; text-align:left; padding:10px 12px}
+  .lvlist button.cur{outline:3px solid var(--frame)}
+  .lvlist .dot{width:30px; height:30px; flex:none; border-radius:8px}
+  .lvlist small{display:block; color:var(--muted); font-weight:600; font-size:11.5px}
+</style>
+</head>
+<body>
+<div id="app">
+  <section class="book">
+    <div class="page left">
+      <button class="pbtn" id="home" title="Chọn màn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 11 12 4l9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/></svg></button>
+      <div class="lvl" id="lvlname">1-1</div>
+      <button class="pbtn" id="reset" title="Reset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v5h5"/></svg></button>
+      <button class="pbtn" id="undo" title="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
+      <div class="rings"><i></i><i></i><i></i></div>
+    </div>
+    <div class="page right">
+      <div class="targetwrap" id="target"></div>
+      <button class="hintbtn" id="hint" title="Gợi ý">💡<b id="hints">3</b></button>
+    </div>
+  </section>
+
+  <section class="boxarea" id="boxarea">
+    <div class="bento"><div id="box"></div><div class="lip"></div></div>
+    <div class="tip" id="tip"></div>
+  </section>
+
+  <section>
+    <div class="tray"><div id="hand"></div></div>
+    <div class="rulebar">Chạm thẻ trên khay để xoay · chạm thẻ trên cùng (viền nét đứt) để trả về khay · giữ ô để xem lớp</div>
+  </section>
+</div>
+
+<div id="float"></div>
+<div id="layers"></div>
+<div id="toast"></div>
+<div class="modal" id="win">
+  <div class="sheet">
+    <h2>Hoàn thành! 🎉</h2>
+    <div class="ko">완성! · Khách đã nhận hộp cơm</div>
+    <div class="mini" id="winbox"></div>
+    <div class="quote" id="winquote"></div>
+    <div class="btns"><button class="btn2" id="again">Chơi lại</button><button class="btn1" id="next">Màn tiếp →</button></div>
+  </div>
+</div>
+<div class="modal" id="levels">
+  <div class="sheet">
+    <h2>Chọn màn</h2>
+    <div class="ko">Mỗi màn giới thiệu một loại thẻ</div>
+    <div class="lvlist" id="lvlist"></div>
+  </div>
+</div>
+
+<script>
+//#LOGIC-START
+const ING = {
+  rice:        { vi:'Cơm',        ko:'밥' },
+  kimchi:      { vi:'Kimchi',     ko:'김치' },
+  egg:         { vi:'Trứng',      ko:'계란' },
+  seaweed:     { vi:'Rong biển',  ko:'김' },
+  rice_kimchi: { vi:'Cơm kimchi', ko:'김치밥', fusion:true },
+};
+// fusion.json — TẠM TẮT. Bật lại bằng cách thêm dòng, vd: { base:'rice', top:'kimchi', result:'rice_kimchi' }
+const FUSION = [];
+/* Loại thẻ & ký hiệu trong cells:
+   food  : tên nguyên liệu         — đè lên ô
+   fill  : tên nguyên liệu         — chỉ lấp ô trống, giữ nguyên ô đã có đồ
+   swap  : 'a' (2 ô)               — đổi chỗ lớp trên cùng của 2 ô
+   move  : 's' nguồn, 'd' đích     — đẩy lớp trên cùng của ô nguồn sang ô đích
+   copy  : 's' nguồn, 'd' các đích — nhân bản lớp trên cùng của nguồn lên các ô đích
+   grab  : 1                        — rút lớp trên cùng, tạo thẻ food mới trên tay
+   lock:true trên bất kỳ thẻ nào    — cấm xoay */
+const LEVELS = [
+  { id:'1-1', name:'Đổi chỗ', theme:'pink', width:3, height:2,
+    tip:'Thẻ <b>S!</b> đổi chỗ 2 nguyên liệu trên cùng. Thẻ có dấu <b style="color:#d6453a">✕</b> không xoay được.',
+    quote:'“Trứng bên trái mới chuẩn vị! 감사합니다!”',
+    target:[['egg','rice','rice'],['seaweed','seaweed','seaweed']],
+    cards:[
+      { type:'food', lock:true, cells:[['rice','egg','rice'],['seaweed','seaweed','seaweed']] },
+      { type:'swap', cells:[['a','a']] },
+    ]},
+  { id:'1-2', name:'Đẩy', theme:'orange', width:3, height:2,
+    tip:'Thẻ <b>M!</b> đẩy nguyên liệu trên cùng trượt 1 ô theo mũi tên — lộ ra lớp bên dưới.',
+    quote:'“Một quả trứng ở giữa là đủ rồi~ Cảm ơn nha!”',
+    target:[['rice','egg','rice'],['rice','rice','rice']],
+    cards:[
+      { type:'food', cells:[['rice','rice','rice'],['rice','rice','rice']] },
+      { type:'food', lock:true, cells:[['egg','egg']] },
+      { type:'move', cells:[['s','d']] },
+    ]},
+  { id:'1-3', name:'Gắp', theme:'green', width:3, height:2,
+    tip:'Thẻ <b>G!</b> gắp nguyên liệu khỏi hộp và tạo ra <b>1 thẻ mới</b> trên tay. Phải đặt hết thẻ.',
+    quote:'“Hai quả trứng hai bên, đẹp quá! 예쁘다!”',
+    target:[['egg','rice','egg'],['rice','rice','rice']],
+    cards:[
+      { type:'food', cells:[['rice','rice','rice'],['rice','rice','rice']] },
+      { type:'food', lock:true, cells:[['egg','egg']] },
+      { type:'grab', cells:[[1]] },
+    ]},
+  { id:'1-4', name:'Nhân bản', theme:'teal', width:3, height:2,
+    tip:'Thẻ <b>C!</b> nhân bản nguyên liệu ở ô nguồn (chấm tròn) lên các ô mũi tên.',
+    quote:'“Ba quả trứng! Hôm nay mình đói lắm 배고파~”',
+    target:[['egg','egg','egg'],['seaweed','seaweed','rice']],
+    cards:[
+      { type:'food', cells:[['rice','rice','rice'],['rice','rice','rice']] },
+      { type:'food', cells:[['egg']] },
+      { type:'food', lock:true, cells:[['seaweed','seaweed']] },
+      { type:'copy', cells:[['s','d','d']] },
+    ]},
+  { id:'1-5', name:'Lấp đầy', theme:'yellow', width:3, height:2,
+    tip:'Thẻ <b>F!</b> chỉ lấp các ô trống, giữ nguyên ô đã có đồ.',
+    quote:'“Kimchi riêng, cơm riêng — đúng ý mình! 좋아요!”',
+    target:[['kimchi','rice','kimchi'],['rice','egg','rice']],
+    cards:[
+      { type:'food', lock:true, cells:[['kimchi',null,'kimchi']] },
+      { type:'food', cells:[['egg']] },
+      { type:'fill', cells:[['rice','rice','rice'],['rice','rice','rice']] },
+    ]},
+  { id:'1-6', name:'Hộp cơm Seoul', theme:'red', width:3, height:3,
+    tip:'Màn tổng hợp: xoay, chồng lớp và <b>G!</b> gắp.',
+    quote:'“Wa, có cả kimchi! 맛있겠다! Cảm ơn bạn nhiều nha~”',
+    target:[['egg','kimchi','egg'],['rice','kimchi','rice'],['seaweed','seaweed','seaweed']],
+    cards:[
+      { type:'food', cells:[['rice','rice'],['rice','rice'],['rice','rice']] },
+      { type:'food', cells:[['kimchi','kimchi']] },
+      { type:'food', lock:true, cells:[['egg','egg']] },
+      { type:'food', cells:[['seaweed'],['seaweed'],['seaweed']] },
+      { type:'grab', cells:[[1]] },
+    ]},
+];
+
+function fuse(base, top){ const f = FUSION.find(f => f.base===base && f.top===top); return f ? f.result : null; }
+function rotateCW(cells){
+  const h = cells.length, w = cells[0].length, out = [];
+  for (let r=0; r<w; r++){ out.push([]); for (let c=0; c<h; c++) out[r].push(cells[h-1-c][r]); }
+  return out;
+}
+function filled(v){ return v !== null && v !== 0 && v !== undefined; }
+function fits(cells, x, y, W, H){
+  for (let r=0; r<cells.length; r++) for (let c=0; c<cells[0].length; c++)
+    if (filled(cells[r][c]) && (x+c<0 || y+r<0 || x+c>=W || y+r>=H)) return false;
+  return true;
+}
+function trim(cells){
+  const rows = cells.filter(row => row.some(filled));
+  const keep = rows[0].map((_,c) => rows.some(row => filled(row[c])));
+  return rows.map(row => row.filter((_,c) => keep[c]));
+}
+function rotsOf(card){
+  const out = [], seen = new Set(); let cur = card.cells;
+  for (let rot=0; rot<(card.lock ? 1 : 4); rot++){
+    const k = JSON.stringify(cur);
+    if (!seen.has(k)){ seen.add(k); out.push({ rot, cells:cur }); }
+    cur = rotateCW(cur);
+  }
+  return out;
+}
+/* Áp một thẻ lên hộp. board[i] = chồng lớp {ing, card, under?} (dưới → trên); không sửa board gốc.
+   Trả về null nếu không đặt được, ngược lại { board, fx (fusion), newCard (grab), added (ô thẻ để lại lớp) } */
+function applyCard(board, card, cells, x, y, W, H){
+  if (!fits(cells, x, y, W, H)) return null;
+  const b = board.map(s => s.slice()), fx = [], added = [];
+  const marks = {};
+  cells.forEach((row,r) => row.forEach((v,c) => { if (filled(v)) (marks[v] = marks[v] || []).push((y+r)*W + x+c); }));
+  const put = (i, ing, cid, layer) => {
+    const st = b[i], top = st[st.length-1], f = top && fuse(top.ing, ing);
+    if (f){ st[st.length-1] = { ing:f, card:cid, under:top }; fx.push({ idx:i, result:f }); }
+    else st.push(layer || { ing, card:cid });
+  };
+  let newCard = null;
+  switch (card.type){
+    case 'food':
+      cells.forEach((row,r) => row.forEach((v,c) => { if (filled(v)){ const i = (y+r)*W + x+c; put(i, v, card.id); added.push(i); } }));
+      break;
+    case 'fill': {
+      cells.forEach((row,r) => row.forEach((v,c) => {
+        const i = (y+r)*W + x+c;
+        if (filled(v) && !b[i].length){ b[i].push({ ing:v, card:card.id }); added.push(i); }
+      }));
+      if (!added.length) return null;
+      break;
+    }
+    case 'grab': {
+      let any = false;
+      const got = cells.map((row,r) => row.map((v,c) => {
+        if (!filled(v)) return null;
+        const st = b[(y+r)*W + x+c];
+        if (!st.length) return null;
+        any = true; return st.pop().ing;
+      }));
+      if (!any) return null;
+      newCard = { type:'food', cells:trim(got) };
+      break;
+    }
+    case 'swap': {
+      const [p, q] = marks.a;
+      if (!b[p].length && !b[q].length) return null;
+      const t1 = b[p].pop(), t2 = b[q].pop();
+      if (t2) b[p].push(t2);
+      if (t1) b[q].push(t1);
+      break;
+    }
+    case 'move': {
+      const s = marks.s[0], d = marks.d[0];
+      if (!b[s].length) return null;
+      const l = b[s].pop(); put(d, l.ing, l.card, l);
+      break;
+    }
+    case 'copy': {
+      const st = b[marks.s[0]];
+      if (!st.length) return null;
+      const ing = st[st.length-1].ing;
+      marks.d.forEach(i => put(i, ing, card.id));
+      break;
+    }
+  }
+  return { board:b, fx, newCard, added };
+}
+const topIng = st => st.length ? st[st.length-1].ing : null;
+function boardMatches(board, target, W){
+  return board.every((st,i) => topIng(st) === target[Math.floor(i/W)][i%W]);
+}
+/* Solver vét cạn: thử mọi thẻ × hướng xoay × vị trí, đệ quy tới khi hết thẻ */
+function solve(board, hand, level, countAll){
+  const W = level.width, H = level.height, dead = new Set(), path = [], canonCache = new Map();
+  let first = null, count = 0;
+  const canon = cd => {
+    const raw = cd.type + (cd.lock ? '!' : '') + JSON.stringify(cd.cells);
+    if (!canonCache.has(raw)) canonCache.set(raw, cd.type + (cd.lock ? '!' + JSON.stringify(cd.cells) : rotsOf(cd).map(o => JSON.stringify(o.cells)).sort()[0]));
+    return canonCache.get(raw);
+  };
+  const key = (b,hd) => b.map(s => s.map(l => l.ing).join('.')).join('|') + '#' + hd.map(canon).sort().join('~');
+  // ước lượng số ô mà phần thẻ còn lại có thể thay đổi — dùng để cắt nhánh
+  const reach = cd => cd.type === 'grab' ? Infinity
+    : cd.type === 'swap' || cd.type === 'move' ? 2
+    : cd.cells.flat().filter(v => filled(v) && v !== 's').length;
+  function rec(b, hd){
+    if (!hd.length){
+      if (boardMatches(b, level.target, W)){ count++; if (!first) first = path.slice(); return true; }
+      return false;
+    }
+    const k = key(b, hd); if (dead.has(k)) return false;
+    let wrong = 0;
+    b.forEach((st,i) => { if (topIng(st) !== level.target[Math.floor(i/W)][i%W]) wrong++; });
+    if (wrong > hd.reduce((a,cd) => a + reach(cd), 0)){ dead.add(k); return false; }
+    let found = false;
+    for (let i=0; i<hd.length; i++){
+      for (const { rot, cells } of rotsOf(hd[i])){
+        for (let y=-cells.length+1; y<H; y++) for (let x=-cells[0].length+1; x<W; x++){
+          const res = applyCard(b, hd[i], cells, x, y, W, H); if (!res) continue;
+          const nh = hd.slice();
+          if (res.newCard) nh[i] = res.newCard; else nh.splice(i,1);
+          path.push({ i, rot, x, y });
+          const ok = rec(res.board, nh);
+          path.pop();
+          if (ok){ found = true; if (!countAll) return true; }
+        }
+      }
+    }
+    if (!found) dead.add(k);
+    return found;
+  }
+  rec(board, hand);
+  return { first, count };
+}
+//#LOGIC-END
+
+if (typeof document !== 'undefined') (function(){
+const $ = s => document.querySelector(s);
+const clone = o => JSON.parse(JSON.stringify(o));
+const GAP = 3;
+const THEMES = {
+  pink:   { bg:'#fbefe9', frame:'#b5506a', frameDark:'#7e2f45', empty:'#8f3a52' },
+  orange: { bg:'#fdf0d2', frame:'#e98a2c', frameDark:'#b45f16', empty:'#c26a1c' },
+  green:  { bg:'#eef4dc', frame:'#3f8f6a', frameDark:'#25624a', empty:'#2e6f53' },
+  teal:   { bg:'#e6f2f1', frame:'#2f8a91', frameDark:'#1d5f66', empty:'#246c73' },
+  yellow: { bg:'#fdf6d8', frame:'#d9a520', frameDark:'#9d7410', empty:'#b38614' },
+  red:    { bg:'#fbebe4', frame:'#c64632', frameDark:'#8a2b1f', empty:'#9e3526' },
+};
+let LV, W, H, CELL = 80;
+let S, hints = 3, hintShown = false, won = false, levelIdx = 5;
+
+/* ---------- Art ---------- */
+function rng(seed){ return () => (seed = (seed*16807) % 2147483647) / 2147483647; }
+function riceGrains(seed, n){
+  const r = rng(seed); let s = '';
+  for (let i=0; i<n; i++){
+    const x = 6+r()*88, y = 6+r()*88, a = r()*180;
+    s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="6.5" ry="3.3" transform="rotate(${a.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="#fffdf6" stroke="#dccaa5" stroke-width="1.2"/>`;
+  }
+  return s;
+}
+const ART = {
+  rice: `<rect width="100" height="100" fill="#f1e6cf"/>${riceGrains(7, 36)}`,
+  kimchi: `<rect width="100" height="100" fill="#b9301a"/>
+    <path d="M-5 20 C20 5 45 30 70 12 S105 18 105 18 L105 48 C80 60 55 38 30 52 S-5 50 -5 50Z" fill="#d94a2c"/>
+    <path d="M-5 58 C25 45 50 70 75 55 S105 62 105 62 L105 105 L-5 105Z" fill="#c23a20"/>
+    <path d="M8 30 C30 22 50 40 78 28" stroke="#f3cfa6" stroke-width="5" fill="none" stroke-linecap="round" opacity=".85"/>
+    <path d="M10 74 C35 64 55 84 88 72" stroke="#f3cfa6" stroke-width="5" fill="none" stroke-linecap="round" opacity=".8"/>
+    <circle cx="22" cy="44" r="2" fill="#7e170b"/><circle cx="60" cy="20" r="2" fill="#7e170b"/><circle cx="82" cy="88" r="2.2" fill="#7e170b"/>`,
+  egg: `<rect width="100" height="100" fill="#f4e7c8"/>
+    <path d="M12 46 C8 20 35 8 55 12 C85 16 96 40 88 62 C82 84 58 94 36 88 C14 82 15 64 12 46Z" fill="#fffdf6" stroke="#eadcb8" stroke-width="2"/>
+    <circle cx="50" cy="50" r="19" fill="#f4a512"/><circle cx="50" cy="50" r="19" fill="none" stroke="#e08e05" stroke-width="2"/>
+    <ellipse cx="43" cy="43" rx="6" ry="4" fill="#ffd36b" opacity=".9"/>`,
+  seaweed: `<rect width="100" height="100" fill="#22382a"/>
+    <path d="M0 25H100M0 50H100M0 75H100M25 0V100M50 0V100M75 0V100" stroke="#2e4a37" stroke-width="2"/>
+    <path d="M10 15 L40 8 M55 70 L90 60 M20 80 L45 74" stroke="#4d7056" stroke-width="3" stroke-linecap="round" opacity=".6"/>`,
+  rice_kimchi: `<rect width="100" height="100" fill="#f1e6cf"/>${riceGrains(11, 30)}
+    <path d="M20 22 C35 12 55 22 70 14 C82 20 84 36 74 44 C60 52 44 40 30 48 C18 46 12 32 20 22Z" fill="#d23f22"/>
+    <path d="M28 56 C44 50 60 64 80 56 C88 66 82 82 68 84 C52 88 40 76 28 80 C18 74 20 62 28 56Z" fill="#c23a20"/>
+    <path d="M28 28 C40 22 52 32 66 24" stroke="#f3cfa6" stroke-width="4" fill="none" stroke-linecap="round" opacity=".85"/>
+    <path d="M32 68 C46 62 58 74 74 66" stroke="#f3cfa6" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/>`,
+};
+const tile = ing => `<span class="tile"><svg viewBox="0 0 100 100">${ART[ing]}</svg></span>`;
+
+// Ô của thẻ chức năng: nền trắng + đường nối tới ô bạn + ký hiệu ở tâm
+const MECH_COLOR = { swap:'#2a9d8f', move:'#d9603b', copy:'#7b5ea7', grab:'#3b6fb6' };
+const DIRS = [[0,1,0],[1,0,90],[0,-1,180],[-1,0,270]]; // [dr,dc,góc]
+function mechCellSVG(card, cells, r, c){
+  const v = cells[r][c], col = MECH_COLOR[card.type];
+  let s = `<rect x="3" y="3" width="94" height="94" rx="12" fill="#fffaf2" stroke="#e3d6c3" stroke-width="3"/>`;
+  if (card.type === 'grab'){
+    return s + `<g fill="none" stroke="${col}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M50 18v34"/><path d="M34 34l16-16 16 16"/><path d="M26 62v14a6 6 0 0 0 6 6h36a6 6 0 0 0 6-6V62"/></g>`;
+  }
+  const at = (rr,cc) => rr>=0 && cc>=0 && rr<cells.length && cc<cells[0].length && filled(cells[rr][cc]) ? cells[rr][cc] : null;
+  const nbrs = DIRS.filter(([dr,dc]) => at(r+dr, c+dc));
+  nbrs.forEach(([,,a]) => s += `<line x1="50" y1="50" x2="100" y2="50" stroke="${col}" stroke-width="9" transform="rotate(${a} 50 50)"/>`);
+  const head = a => `<path d="M70 50 L44 32 L44 68Z" fill="${col}" transform="rotate(${a} 50 50)"/>`;
+  if (v === 's') s += `<circle cx="50" cy="50" r="15" fill="${col}"/><circle cx="50" cy="50" r="6" fill="#fffaf2"/>`;
+  else if (v === 'a') nbrs.forEach(([,,a]) => s += head(a + 180));
+  else if (v === 'd'){
+    // mũi tên hướng ra xa ô nguồn (tính theo khoảng cách tới 's')
+    let sr, sc; cells.forEach((row,rr) => row.forEach((x,cc) => { if (x === 's'){ sr = rr; sc = cc; } }));
+    const dist = (rr,cc) => Math.abs(rr-sr) + Math.abs(cc-sc);
+    const from = nbrs.find(([dr,dc]) => dist(r+dr, c+dc) < dist(r,c)) || nbrs[0];
+    s += head(from[2] + 180);
+    if (card.type === 'copy') s += `<rect x="58" y="14" width="22" height="22" rx="4" fill="none" stroke="${col}" stroke-width="5"/><rect x="66" y="22" width="22" height="22" rx="4" fill="#fffaf2" stroke="${col}" stroke-width="5"/>`;
+  }
+  return s;
+}
+function pieceHTML(card, cs){
+  const cells = card.cells, w = cells[0].length, gap = Math.max(1, Math.round(cs*GAP/CELL));
+  let s = `<div class="pgrid" style="grid-template-columns:repeat(${w},${cs}px);grid-auto-rows:${cs}px;gap:${gap}px">`;
+  cells.forEach((row,r) => row.forEach((v,c) => {
+    if (!filled(v)) s += `<div></div>`;
+    else if (card.type === 'food') s += `<div class="pcell">${tile(v)}</div>`;
+    else if (card.type === 'fill') s += `<div class="pcell">${tile(v)}<span class="fillmark"></span></div>`;
+    else s += `<div class="pcell"><span class="tile" style="box-shadow:none"><svg viewBox="0 0 100 100">${mechCellSVG(card, cells, r, c)}</svg></span></div>`;
+  }));
+  s += `</div>`;
+  if (card.lock) s += `<span class="lock">✕</span>`;
+  if (card.type === 'fill') s += `<span class="fillicon"><svg viewBox="0 0 24 24" fill="#c08a10"><path d="M5 9h12l-1.5 11h-9z"/><path d="M8 9V6a3 3 0 0 1 6 0v3" fill="none" stroke="#c08a10" stroke-width="2"/><circle cx="20" cy="15" r="2"/></svg></span>`;
+  return s;
+}
+function gridHTML(cells, cs){
+  let s = `<div class="pgrid" style="grid-template-columns:repeat(${cells[0].length},${cs}px);grid-auto-rows:${cs}px;gap:2px">`;
+  cells.forEach(row => row.forEach(v => s += v ? `<div>${tile(v)}</div>` : `<div style="background:rgba(0,0,0,.12);border-radius:4px"></div>`));
+  return s + '</div>';
+}
+
+/* ---------- State ---------- */
+function newState(){
+  return {
+    board: Array.from({ length:W*H }, () => []),
+    slots: LV.cards.map((c,i) => ({ id:i+1, type:c.type, lock:!!c.lock, cells:clone(c.cells), slot:i })),
+    stack: [], nextId: 100,
+  };
+}
+const handCards = () => S.slots.filter(Boolean);
+const topOf = i => { const st = S.board[i]; return st.length ? st[st.length-1] : null; };
+
+/* Stack các thẻ đã đặt: mỗi phần tử lưu trạng thái ngay trước khi đặt thẻ đó.
+   Chỉ thẻ trên đỉnh stack được kéo, hoặc chạm để trả về khay. */
+function coveredIdxs(cells, x, y){
+  const out = [];
+  cells.forEach((row,r) => row.forEach((v,c) => { if (filled(v)) out.push((y+r)*W + x+c); }));
+  return out;
+}
+const topEntry = () => S.stack[S.stack.length-1];
+function commit(card, x, y){
+  S.stack.push({ cardId:card.id, x, y, idxs:coveredIdxs(card.cells, x, y),
+    before:JSON.stringify({ board:S.board, slots:S.slots, nextId:S.nextId }) });
+  const res = applyCard(S.board, card, card.cells, x, y, W, H);
+  S.board = res.board;
+  S.slots[card.slot] = null;
+  if (res.newCard){
+    const nc = { ...res.newCard, id:S.nextId++, slot:card.slot, lock:false, fresh:true };
+    S.slots[card.slot] = nc;
+  }
+  return res;
+}
+// Gỡ thẻ trên đỉnh stack: hộp và khay quay về như trước khi đặt (thẻ G! cũng thu lại thẻ nó đã tạo)
+function popTop(){
+  const e = S.stack.pop(), b = JSON.parse(e.before);
+  S.board = b.board; S.slots = b.slots; S.nextId = b.nextId;
+  return { entry:e, card:S.slots.find(c => c && c.id === e.cardId) };
+}
+
+/* ---------- Layout & render ---------- */
+function applyTheme(){
+  const t = THEMES[LV.theme], root = document.documentElement.style;
+  root.setProperty('--bg', t.bg); root.setProperty('--frame', t.frame);
+  root.setProperty('--frameDark', t.frameDark); root.setProperty('--empty', t.empty);
+}
+function fitCell(){
+  const area = $('#boxarea'), tipH = $('#tip').offsetHeight + 8;
+  const byW = Math.floor((Math.min(innerWidth, 440) - 32 - 24 - 2*GAP - GAP*(W-1)) / W);
+  const byH = Math.floor((area.clientHeight - tipH - 12 - 36 - 2*GAP - GAP*(H-1)) / H);
+  return Math.max(36, Math.min(100, byW, byH));
+}
+function slotCell(card){
+  const slot = $('#hand .slot'); const size = slot ? slot.clientWidth : 64;
+  return Math.min(22, Math.floor((size - 14) / Math.max(card.cells.length, card.cells[0].length, 2)));
+}
+function renderTarget(){
+  const cs = Math.floor(Math.min(30, 96 / Math.max(W, H)));
+  $('#target').innerHTML = gridHTML(LV.target, cs);
+}
+function renderBox(){
+  const box = $('#box');
+  box.style.gridTemplateColumns = `repeat(${W},${CELL}px)`;
+  box.style.gridAutoRows = `${CELL}px`;
+  const top = topEntry(), topSet = new Set(top ? top.idxs : []);
+  box.innerHTML = S.board.map((st,i) => {
+    const t = st[st.length-1];
+    return `<div class="bcell ${topSet.has(i) ? 'top' : ''}" data-i="${i}">${t ? tile(t.ing) : ''}${st.length > 1 ? `<span class="badge">${st.length}</span>` : ''}</div>`;
+  }).join('') + '<div id="overlay"></div>';
+}
+function renderHand(){
+  $('#hand').innerHTML = S.slots.map(() => `<div class="slot"></div>`).join('');
+  const els = document.querySelectorAll('#hand .slot');
+  S.slots.forEach((cd,i) => {
+    if (!cd){ els[i].classList.add('empty'); return; }
+    const hc = slotCell(cd);
+    els[i].innerHTML = `<div class="piece ${cd.fresh ? 'pop' : ''}" data-id="${cd.id}" data-hc="${hc}">${pieceHTML(cd, hc)}</div>`;
+    delete cd.fresh;
+  });
+}
+function render(){
+  renderBox(); renderHand();
+  $('#undo').disabled = !S.stack.length;
+  $('#hints').textContent = hints;
+  hintShown = false;
+}
+function loadLevel(i){
+  levelIdx = i; LV = LEVELS[i]; W = LV.width; H = LV.height;
+  won = false; S = newState();
+  applyTheme();
+  $('#lvlname').textContent = LV.id;
+  $('#tip').innerHTML = LV.tip;
+  renderTarget(); relayout();
+}
+function relayout(){ $('#box').innerHTML = ''; CELL = fitCell(); render(); }
+function showOverlay(cells){
+  const ov = $('#overlay'); if (!ov) return;
+  ov.innerHTML = cells.map(g => {
+    const r = Math.floor(g.idx/W), c = g.idx%W;
+    return `<div class="gcell ${g.cls}" style="left:${GAP + c*(CELL+GAP)}px;top:${GAP + r*(CELL+GAP)}px;width:${CELL}px;height:${CELL}px">${g.ing ? tile(g.ing) : ''}</div>`;
+  }).join('');
+}
+// Xem trước kết quả: so lớp trên cùng trước/sau khi áp thẻ
+function previewCells(card, x, y){
+  const covered = [];
+  card.cells.forEach((row,r) => row.forEach((v,c) => {
+    const cx = x+c, cy = y+r;
+    if (filled(v) && cx>=0 && cy>=0 && cx<W && cy<H) covered.push(cy*W+cx);
+  }));
+  const res = applyCard(S.board, card, card.cells, x, y, W, H);
+  if (!res) return { valid:false, cells: covered.map(idx => ({ idx, cls:'bad' })) };
+  const fusionAt = new Set(res.fx.map(f => f.idx)), out = [];
+  for (let i=0; i<W*H; i++){
+    const before = topIng(S.board[i]), after = topIng(res.board[i]), changed = before !== after || S.board[i].length !== res.board[i].length;
+    if (fusionAt.has(i)) out.push({ idx:i, ing:after, cls:'fusion' });
+    else if (changed && card.type === 'grab') out.push({ idx:i, ing:after, cls:'gone' });
+    else if (changed && after && (after !== before || res.board[i].length > S.board[i].length)) out.push({ idx:i, ing:after, cls:'ok' });
+    else if (changed) out.push({ idx:i, cls:'gone' });
+    else if (covered.includes(i)) out.push({ idx:i, cls:'idle' });
+  }
+  return { valid:true, cells:out };
+}
+
+/* ---------- Âm thanh & hiệu ứng ---------- */
+let AC;
+function audio(){ if (!AC) try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} return AC; }
+function tone(f1, f2, dur, type='sine', vol=.3){
+  const a = audio(); if (!a) return; const t = a.currentTime, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(f2, t+dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t+dur+.03);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+.05);
+}
+function noise(dur, freq, vol){
+  const a = audio(); if (!a) return; const t = a.currentTime;
+  const b = a.createBuffer(1, a.sampleRate*dur, a.sampleRate), d = b.getChannelData(0);
+  for (let i=0; i<d.length; i++) d[i] = Math.random()*2-1;
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
+  s.buffer = b; f.type = 'highpass'; f.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t+dur);
+  s.connect(f).connect(g).connect(a.destination); s.start(t);
+}
+const SFX = {
+  food: () => tone(320, 110, .12),
+  fill: () => tone(260, 140, .18, 'triangle', .25),
+  swap: () => { tone(500, 700, .08, 'triangle', .2); setTimeout(() => tone(700, 500, .08, 'triangle', .2), 80); },
+  move: () => tone(300, 600, .14, 'triangle', .22),
+  copy: () => { tone(600, 600, .06, 'square', .08); setTimeout(() => tone(800, 800, .06, 'square', .08), 70); },
+  grab: () => { noise(.05, 4000, .35); setTimeout(() => tone(400, 900, .1, 'triangle', .2), 60); },
+  fusion: () => noise(.55, 2500, .22),
+};
+function chime(){ [523,659,784,1046].forEach((f,i) => setTimeout(() => tone(f, f, .35, 'triangle', .22), i*110)); }
+let toastT;
+function toast(msg, ms=2400){ const t = $('#toast'); t.innerHTML = msg; t.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms); }
+function cellCenter(idx){ const r = document.querySelector(`.bcell[data-i="${idx}"]`).getBoundingClientRect(); return { x:r.left+r.width/2, y:r.top+r.height/2 }; }
+function fusionFx(fx){
+  if (!fx.length) return;
+  SFX.fusion();
+  const names = {};
+  fx.forEach(f => {
+    const p = cellCenter(f.idx);
+    for (let k=0; k<10; k++){
+      const s = document.createElement('div'); s.className = 'spark';
+      const a = Math.random()*Math.PI*2, d = 30 + Math.random()*30;
+      s.style.cssText = `left:${p.x}px;top:${p.y}px;background:${k%2?'#ffd23f':'#e0533a'};--dx:${Math.cos(a)*d}px;--dy:${Math.sin(a)*d}px`;
+      document.body.appendChild(s); setTimeout(() => s.remove(), 650);
+    }
+    (names[f.result] = names[f.result] || []).push(p);
+  });
+  Object.entries(names).forEach(([ing, ps]) => {
+    const n = document.createElement('div'); n.className = 'fxname';
+    n.innerHTML = `✨ ${ING[ing].vi}<small>${ING[ing].ko}</small>`;
+    n.style.left = ps.reduce((a,p) => a+p.x, 0)/ps.length + 'px';
+    n.style.top = Math.min(...ps.map(p => p.y)) - 10 + 'px';
+    document.body.appendChild(n); setTimeout(() => n.remove(), 1350);
+  });
+}
+function afterMove(){
+  if (handCards().length || drag) return;
+  if (boardMatches(S.board, LV.target, W)){
+    won = true;
+    setTimeout(() => {
+      chime();
+      $('#winbox').innerHTML = `<div class="bento" style="padding:6px 6px 0"><div style="background:var(--empty);padding:2px;border-radius:3px">${gridHTML(S.board.reduce((rows,st,i) => { (rows[Math.floor(i/W)] = rows[Math.floor(i/W)] || []).push(topIng(st)); return rows; }, []), 30)}</div><div class="lip" style="height:12px;margin:6px -6px 0"></div></div>`;
+      $('#winquote').innerHTML = LV.quote;
+      $('#next').style.display = levelIdx < LEVELS.length-1 ? '' : 'none';
+      $('#win').classList.add('show');
+    }, 650);
+  } else setTimeout(() => toast('Chưa giống mẫu, thử lại nhé! Bấm <b>Undo</b> để lùi từng bước.', 3200), 450);
+}
+
+/* ---------- Kéo / chạm ---------- */
+let press = null, drag = null;
+const floatEl = $('#float');
+const pitch = () => CELL + GAP;
+function startDrag(card, offX, offY){
+  drag = { card, offX, offY, snap:null };
+  const el = document.querySelector(`.piece[data-id="${card.id}"]`); el && el.classList.add('ghosted');
+  floatEl.innerHTML = `<div class="piece">${pieceHTML(card, CELL)}</div>`;
+  floatEl.style.display = 'block';
+}
+function moveDrag(e){
+  const left = e.clientX - drag.offX, top = e.clientY - drag.offY;
+  floatEl.style.transform = `translate(${left}px,${top}px)`;
+  const br = $('#box').getBoundingClientRect(), p = pitch();
+  const x = Math.round((left - br.left - GAP)/p), y = Math.round((top - br.top - GAP)/p);
+  const near = e.clientX > br.left - p*.5 && e.clientX < br.right + p*.5 && e.clientY > br.top - p*.5 && e.clientY < br.bottom + p*.5;
+  if (!near){ drag.snap = null; showOverlay([]); floatEl.classList.remove('bad', 'over'); return; }
+  const pv = previewCells(drag.card, x, y);
+  drag.snap = pv.valid ? { x, y } : null;
+  floatEl.classList.toggle('bad', !pv.valid);
+  floatEl.classList.toggle('over', pv.valid);
+  showOverlay(pv.cells);
+}
+function endDrag(){
+  const { card, snap } = drag;
+  drag = null; floatEl.style.display = 'none'; floatEl.classList.remove('bad', 'over');
+  if (!snap){ render(); return; }   // thả ra ngoài hộp: thẻ nằm lại trên khay
+  const res = commit(card, snap.x, snap.y);
+  SFX[card.type](); render(); fusionFx(res.fx);
+  afterMove();
+}
+$('#hand').addEventListener('pointerdown', e => {
+  const el = e.target.closest('.piece'); if (!el || won) return;
+  const card = handCards().find(c => c.id === +el.dataset.id);
+  const r = el.querySelector('.pgrid').getBoundingClientRect(), k = CELL / +el.dataset.hc;
+  press = { kind:'hand', el, card, sx:e.clientX, sy:e.clientY, offX:(e.clientX - r.left)*k, offY:(e.clientY - r.top)*k };
+  audio();
+});
+$('#box').addEventListener('pointerdown', e => {
+  const el = e.target.closest('.bcell'); if (!el || won) return;
+  const idx = +el.dataset.i, top = topEntry();
+  press = { kind: top && top.idxs.includes(idx) ? 'top' : 'box', el, idx, sx:e.clientX, sy:e.clientY };
+  press.timer = setTimeout(() => { if (press && press.idx === idx){ press.long = true; showLayers(idx, el); } }, 380);
+  audio();
+});
+window.addEventListener('pointermove', e => {
+  if (drag){ moveDrag(e); return; }
+  if (!press || press.long) return;
+  if (Math.hypot(e.clientX - press.sx, e.clientY - press.sy) < 7) return;
+  clearTimeout(press.timer);
+  if (press.kind === 'hand'){
+    startDrag(press.card, press.offX, press.offY);
+  } else if (press.kind === 'top'){
+    const br = $('#box').getBoundingClientRect(), p = pitch();
+    const { entry, card } = popTop();
+    render();
+    startDrag(card, press.sx - (br.left + GAP + entry.x*p), press.sy - (br.top + GAP + entry.y*p));
+  } else {
+    if (S.stack.length){
+      const el = press.el; el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 400);
+      toast('Chỉ kéo được thẻ đặt sau cùng (ô viền nét đứt).');
+    }
+    press = null; return;
+  }
+  press = null;
+  moveDrag(e);
+});
+window.addEventListener('pointerup', () => {
+  if (drag){ endDrag(); return; }
+  if (!press) return;
+  clearTimeout(press.timer);
+  if (press.kind === 'hand') rotateCard(press.card, press.el);
+  else if (press.kind === 'top' && !press.long) returnTop();
+  hideLayers();
+  press = null;
+});
+window.addEventListener('pointercancel', () => { if (drag){ drag.snap = null; endDrag(); } hideLayers(); press = null; });
+
+function rotateCard(card, el){
+  if (card.lock){
+    el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 400);
+    toast('Thẻ có dấu ✕ bị khóa xoay.'); return;
+  }
+  if (rotsOf(card).length === 1){ el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 400); return; }
+  el.classList.add('spin');
+  setTimeout(() => { card.cells = rotateCW(card.cells); renderHand(); }, 170);
+}
+function showLayers(idx, el){
+  const st = S.board[idx], pop = $('#layers');
+  pop.innerHTML = `<h4>Các lớp trong ô (trên → dưới)</h4>` + (st.length
+    ? st.slice().reverse().map((l,i) => `<div class="row ${i===0?'top':''}">${tile(l.ing)}<div><b>${ING[l.ing].vi}</b> · ${ING[l.ing].ko}${ING[l.ing].fusion?' <small>(fusion)</small>':''}</div></div>`).join('')
+    : `<div class="row" style="color:var(--muted)">Ô trống</div>`);
+  pop.style.display = 'block';
+  const r = el.getBoundingClientRect(), pr = pop.getBoundingClientRect();
+  pop.style.left = Math.max(8, Math.min(innerWidth - pr.width - 8, r.left + r.width/2 - pr.width/2)) + 'px';
+  pop.style.top = Math.max(8, r.top - pr.height - 8) + 'px';
+}
+function hideLayers(){ $('#layers').style.display = 'none'; }
+
+/* ---------- Nút ---------- */
+function returnTop(){
+  if (!S.stack.length || won) return;
+  popTop(); tone(500, 250, .1, 'triangle', .2); render();
+}
+$('#undo').onclick = returnTop;
+$('#reset').onclick = () => { if (!S.stack.length || won) return; S = newState(); render(); };
+$('#hint').onclick = () => {
+  if (won || hintShown) return;
+  if (!hints){ toast('Hết gợi ý rồi! (Bản thật: nhận thêm từ thưởng / xem quảng cáo)'); return; }
+  const hand = handCards();
+  const res = solve(S.board, hand.map(c => ({ type:c.type, lock:c.lock, cells:c.cells })), LV, false);
+  if (!res.first){ toast('Từ trạng thái này không còn lời giải — thử <b>Undo</b> nhé.', 3000); return; }
+  hints--; $('#hints').textContent = hints;
+  const step = res.first[0], card = hand[step.i];
+  let cells = card.cells; for (let k=0; k<step.rot; k++) cells = rotateCW(cells);
+  const cov = [];
+  cells.forEach((row,r) => row.forEach((v,c) => { if (filled(v)) cov.push({ idx:(step.y+r)*W + step.x+c, cls:'hint' }); }));
+  showOverlay(cov);
+  const el = document.querySelector(`.piece[data-id="${card.id}"]`); el && el.classList.add('pulse');
+  hintShown = true;
+  toast(`💡 Đặt thẻ đang nhún vào ô xanh${step.rot ? ` — xoay <b>${step.rot}</b> lần trước` : ''}.`, 3500);
+};
+$('#again').onclick = () => { $('#win').classList.remove('show'); loadLevel(levelIdx); };
+$('#next').onclick = () => { $('#win').classList.remove('show'); loadLevel(levelIdx + 1); };
+$('#home').onclick = () => {
+  $('#lvlist').innerHTML = LEVELS.map((l,i) =>
+    `<button data-i="${i}" class="${i===levelIdx?'cur':''}"><span class="dot" style="background:${THEMES[l.theme].frame}"></span><span><b>${l.id} · ${l.name}</b><small>${l.tip.replace(/<[^>]+>/g,'')}</small></span></button>`).join('');
+  $('#levels').classList.add('show');
+};
+$('#lvlist').onclick = e => { const b = e.target.closest('button'); if (!b) return; $('#levels').classList.remove('show'); loadLevel(+b.dataset.i); };
+$('#levels').onclick = e => { if (e.target.id === 'levels') $('#levels').classList.remove('show'); };
+window.addEventListener('resize', relayout);
+
+loadLevel(0);
+})();
+</script>
+</body>
+</html>

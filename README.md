@@ -8,6 +8,7 @@ Các bản prototype HTML dựng lại để nghiên cứu mechanic game. Mỗi 
 |---|---|---|
 | Perfect Bento | https://dtungz.github.io/PrototypeGame/perfect-bento/ | [`perfect-bento/`](perfect-bento/) |
 | Plug It In | https://dtungz.github.io/PrototypeGame/plug-it-in/ | [`plug-it-in/`](plug-it-in/) |
+| InBento (Hộp Cơm Việt–Hàn) | https://dtungz.github.io/PrototypeGame/inbento/ | [`inbento/`](inbento/) |
 
 ## Thêm một prototype mới
 1. Tạo thư mục mới ở gốc repo, tên viết thường, nối bằng dấu gạch ngang (ví dụ `jelly-puzzle/`), có `index.html` bên trong.
