@@ -498,18 +498,31 @@ function knifeHit(pt) {
     const t = Math.max(-0.3 / k.len, Math.min(1 + 0.3 / k.len, ((pt.col - ax) * (bx - ax) + (pt.row - ay) * (by - ay)) / (k.len * k.len)));
     const qx = ax + t * (bx - ax), qy = ay + t * (by - ay);
     if (Math.hypot(pt.col - qx, pt.row - qy) < 0.38) return k;
+    // the ↻ badge sits beside the blade; tapping it must count as tapping the knife
+    if (k.canRot) {
+      const [ix, iy] = knifeIconPos(k);
+      if (Math.hypot(pt.col - ix, pt.row - iy) < 0.4) return k;
+    }
   }
   return null;
 }
+// centre of the ↻ badge, in board cells (drawKnife draws it at the same spot)
+function knifeIconPos(k) {
+  return k.dir === "h" ? [k.x + k.len / 2, k.y - 0.42] : [k.x + 0.42, k.y + k.len / 2];
+}
 
+// tap vs drag is decided in screen px, so a shaky finger still counts as a tap
+function tapInfo(e) {
+  return { id: e.pointerId, cx: e.clientX, cy: e.clientY, slop: e.pointerType === "mouse" ? 5 : 12, moved: false };
+}
 cv.addEventListener("pointerdown", (e) => {
-  if (!G || G.won || G.drag) return;
+  if (!G || G.won || G.drag) return;                 // ignore a second finger
   cv.setPointerCapture(e.pointerId);
   const pt = evToBoard(e);
   const col = Math.floor(pt.col), row = Math.floor(pt.row);
   const k = knifeHit(pt);
   if (k) {
-    G.drag = { type: "knife", obj: k, sx: pt.col, sy: pt.row, ox: k.x, oy: k.y, t0: performance.now(), moved: false, before: snapshot() };
+    G.drag = { ...tapInfo(e), type: "knife", obj: k, sx: pt.col, sy: pt.row, ox: k.x, oy: k.y, before: snapshot() };
     sfx("hold-cut", .6);
     return;
   }
@@ -517,7 +530,7 @@ cv.addEventListener("pointerdown", (e) => {
   if (hp) {
     const p = hp.p;
     G.pieces.splice(G.pieces.indexOf(p), 1); G.pieces.push(p);     // bring to front
-    G.drag = { type: "piece", obj: p, sx: pt.col, sy: pt.row, ox: p.x, oy: p.y, fx: p.x, fy: p.y, before: snapshot() };
+    G.drag = { ...tapInfo(e), type: "piece", obj: p, sx: pt.col, sy: pt.row, ox: p.x, oy: p.y, fx: p.x, fy: p.y, before: snapshot() };
     sfx("pick", .7);
     return;
   }
@@ -525,17 +538,18 @@ cv.addEventListener("pointerdown", (e) => {
   if (ht) {
     const t = ht.t;
     const carried = G.pieces.filter(p => pieceInTray(p, t));
-    G.drag = { type: "tray", obj: t, carried, sx: pt.col, sy: pt.row, ox: t.x, oy: t.y, fx: t.x, fy: t.y,
+    G.drag = { ...tapInfo(e), type: "tray", obj: t, carried, sx: pt.col, sy: pt.row, ox: t.x, oy: t.y, fx: t.x, fy: t.y,
       pOrig: carried.map(p => [p.x, p.y]), before: snapshot() };
     sfx("pick", .7);
   }
 });
 
 cv.addEventListener("pointermove", (e) => {
-  const d = G && G.drag; if (!d) return;
+  const d = G && G.drag; if (!d || e.pointerId !== d.id) return;
+  if (!d.moved && Math.hypot(e.clientX - d.cx, e.clientY - d.cy) <= d.slop) return;
+  d.moved = true;
   const pt = evToBoard(e);
   const dx = pt.col - d.sx, dy = pt.row - d.sy;
-  if (Math.hypot(dx, dy) > 0.15) d.moved = true;
   if (d.type === "knife") {
     const k = d.obj;
     const maxX = k.dir === "h" ? G.cols - k.len : G.cols, maxY = k.dir === "h" ? G.rows : G.rows - k.len;
@@ -547,12 +561,13 @@ cv.addEventListener("pointermove", (e) => {
   }
 });
 
-function endDrag() {
-  const d = G && G.drag; if (!d) return;
+function endDrag(e) {
+  const d = G && G.drag; if (!d || (e && e.pointerId !== d.id)) return;
   G.drag = null;
+  if (e && e.type === "pointercancel" && !d.moved) { updateHud(); return; }   // the browser took the gesture
   if (d.type === "knife") {
     const k = d.obj;
-    if (!d.moved && performance.now() - d.t0 < 350 && k.canRot) rotateKnife(k);
+    if (!d.moved && k.canRot) rotateKnife(k);
     if (snapshotChanged(d.before)) G.history.push(d.before);
     sfx("drop-cut", .6);
   } else if (d.type === "piece" && !d.moved && G.L.mode === "daily") {
@@ -582,6 +597,7 @@ function endDrag() {
 function snapshotChanged(s) { return s !== snapshot(); }
 cv.addEventListener("pointerup", endDrag);
 cv.addEventListener("pointercancel", endDrag);
+cv.addEventListener("contextmenu", (e) => e.preventDefault());   // long-press menu on phones
 
 // Daily mode (DragBlockDaily.TapRotate): tap a rice piece to turn it 90° counter-clockwise,
 // trying small "kick" offsets when the rotated shape would not fit in place.
@@ -777,7 +793,7 @@ function drawKnife(k, active) {
     ctx.fillStyle = "#8fa8f0"; ctx.beginPath(); ctx.arc(x, y, cs * 0.075, 0, 7); ctx.fill();
   }
   if (k.canRot && rotImg.complete) {
-    const mx = (ax + bx) / 2 + (k.dir === "h" ? 0 : cs * 0.42), my = (ay + by) / 2 - (k.dir === "h" ? cs * 0.42 : 0);
+    const [icol, irow] = knifeIconPos(k), mx = px(icol), my = py(irow);
     ctx.save(); ctx.translate(mx, my); ctx.rotate((k.spin || 0) * Math.PI);
     const s = cs * 0.38; ctx.drawImage(rotImg, -s / 2, -s / 2, s, s * rotImg.naturalHeight / rotImg.naturalWidth); ctx.restore();
   }
