@@ -11,8 +11,7 @@ Bản dựng lại game web *Plug It In* (Sam Feng & Jose Salas) từ video game
 ## File
 | File | Nội dung |
 |---|---|
-| `index.html` | Toàn bộ game: render, kéo thả, xoay, luật cắm, UI, âm thanh |
-| `levels.js` | 15 level đã chép từ video và các hàm luật dùng chung (`fits`, `plugShape`) |
+| `index.html` | Toàn bộ game trong **một file duy nhất**: level data (khối `==LEVELS-BEGIN==` … `==LEVELS-END==`), luật cắm, render, kéo thả, UI, âm thanh. Gửi riêng file này cũng chơi được |
 | `tools/solve.js` | Solver vét cạn: `node tools/solve.js [level]` kiểm tra level có giải được không (thêm biến môi trường `PORTRAIT=1` để kiểm tra với lưới dọc 10x13) |
 
 ## Luật (rút ra từ video)
@@ -23,7 +22,7 @@ Bản dựng lại game web *Plug It In* (Sam Feng & Jose Salas) từ video game
 5. Thắng khi **mọi phích đều có điện**: popup "Everyone is happy!". Không cần dùng hết ổ.
 6. Level 15 là màn credits dạng sandbox: cắm hết phích thì có phích mới xuất hiện.
 
-## Định dạng level (`levels.js`)
+## Định dạng level (khối `==LEVELS-BEGIN==` trong `index.html`)
 ```js
 { bg: [r,g,b], tip: "text",
   panel: [[x, y, type, rot], ...],          // type "2"|"3"|"4" hoặc "x" = tấm trống

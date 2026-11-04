@@ -1,6 +1,14 @@
 // Brute-force solver used to check that every transcribed level is solvable
 // under the prototype's rules.   node tools/solve.js [levelNumber]
-const { LEVELS, fits, plugShape } = require("../levels.js");
+// The level data lives inside index.html (so the game is a single file that also
+// opens straight from a phone); pull out the marked block and run it here.
+const fs = require("fs"), path = require("path");
+const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+// skip the rest of the marker line, keep everything up to the end marker
+const block = html.split("// ==LEVELS-BEGIN==")[1].split("// ==LEVELS-END==")[0].replace(/^[^\n]*\n/, "");
+const mod = { exports: {} };
+new Function("module", block)(mod);
+const { LEVELS, fits, plugShape } = mod.exports;
 
 // A plug may only lie on top of the plugs it is (indirectly) plugged into.
 const STRICT = process.env.LOOSE ? false : true;
