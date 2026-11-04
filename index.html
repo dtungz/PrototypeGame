@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prototype Games</title>
+<style>
+  :root {
+    --bg: #f6efe6;
+    --card: #ffffff;
+    --ink: #2d2420;
+    --muted: #7a6a60;
+    --line: #e4d8cc;
+    --accent: #c4563f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1916; --card: #29231f; --ink: #f1e8df; --muted: #b3a397; --line: #3d342e; --accent: #ef8a6f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; line-height: 1.5; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .game { display: block; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+    margin-bottom: 14px; color: inherit; text-decoration: none; transition: border-color .15s, transform .15s; }
+  .game:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .game h2 { margin: 0 0 4px; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .tag { font-size: .75rem; font-weight: 600; color: var(--accent); border: 1px solid currentColor; border-radius: 99px; padding: 1px 8px; }
+  .game p { margin: 0; color: var(--muted); }
+  .links { margin-top: 10px; font-size: .9rem; }
+  .links a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Prototype Games</h1>
+  <p class="sub">Các bản prototype HTML dựng lại để nghiên cứu mechanic. Chọn một game để chơi.</p>
+
+  <a class="game" href="perfect-bento/">
+    <h2>Perfect Bento <span class="tag">Màn dọc</span><span class="tag">134 level</span></h2>
+    <p>Kéo cơm vào khay bento, dùng dao cắt cơm, đặt topping đúng ô. Có chế độ Daily xoay mảnh, Undo và Hint.</p>
+  </a>
+
+  <a class="game" href="plug-it-in/">
+    <h2>Plug It In <span class="tag">Dọc + ngang</span><span class="tag">15 level</span></h2>
+    <p>Cắm phích vào ổ cho khớp chân và hướng, xếp các phích không chồng nhau, cắm chồng vào phích có thêm ổ.</p>
+  </a>
+
+  <p class="links">Mã nguồn: <a href="https://github.com/dtungz/PrototypeGame">github.com/dtungz/PrototypeGame</a></p>
+</main>
+</body>
+</html>

@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Plug It In Prototype</title>
+<style>
+  :root {
+    --page: #86c57a;
+    --ink: #ffffff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { margin: 0; height: 100%; background: var(--page); overflow: hidden;
+    font-family: "Ubuntu", "Segoe UI", system-ui, sans-serif; }
+  #stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,.18); touch-action: none; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+
+  /* side bar (restart / music / home / level) */
+  #side { position: absolute; left: 1.8%; bottom: 4%; display: flex; flex-direction: column; gap: .55em;
+    font-size: calc(var(--u) * 1.5); color: var(--ink); }
+  #side button { width: 2em; height: 2em; border: none; background: none; padding: 0; cursor: pointer; opacity: .95; }
+  #side button svg { width: 100%; height: 100%; fill: var(--ink); }
+  #side button.off { opacity: .45; }
+  #side button:active { transform: scale(.9); }
+  #lvLabel { font-size: .95em; opacity: .95; }
+  #fs { position: absolute; right: 1.2%; bottom: 2%; width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2);
+    border: none; background: none; cursor: pointer; opacity: .6; padding: 0; }
+  #fs svg { width: 100%; height: 100%; fill: var(--ink); }
+
+  /* tip box */
+  #tip { position: absolute; left: 50%; top: 4.5%; transform: translateX(-50%); padding: .55em 2.2em;
+    background: rgba(70, 50, 40, .55); color: #fff; text-align: center; white-space: pre-line; line-height: 1.25;
+    font-size: calc(var(--u) * 1.55); border-radius: .25em; pointer-events: none; display: none; min-width: 22%; }
+
+  /* win popup */
+  #win { position: absolute; left: 50%; top: 50%; width: 20%; aspect-ratio: 1.15; transform: translate(-50%, -50%) scale(0);
+    background: rgba(60, 50, 55, .82); border-radius: .4em; color: #fff; display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between; padding: 1.2em .8em .8em; font-size: calc(var(--u) * 1.5);
+    transition: transform .35s cubic-bezier(.3,1.6,.5,1); }
+  #win.on { transform: translate(-50%, -50%) scale(1); }
+  #win .face { font-size: 1.4em; letter-spacing: .1em; }
+  #win .msg { font-size: 1.25em; transform: rotate(-8deg); }
+  #win .row { display: flex; gap: .4em; width: 100%; }
+  #win button { border: none; background: rgba(0,0,0,.35); color: #fff; font: inherit; font-size: 1.2em; padding: .2em .6em;
+    border-radius: .2em; cursor: pointer; }
+  #win button.next { flex: 1; }
+  #win button svg { width: 1em; height: 1em; fill: #fff; vertical-align: -.1em; }
+
+  /* menu */
+  #menu { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #menu.hide { display: none; }
+  .panel { background: rgba(40, 70, 60, .78); border-radius: .4em; padding: 1.2em 1.4em; color: #fff; text-align: center;
+    font-size: calc(var(--u) * 1.5); width: 44%; }
+  .panel h1 { font-size: 3em; margin: .1em 0 .3em; letter-spacing: .08em; }
+  .panel h2 { font-size: 1.1em; font-weight: 400; margin: 0 0 .8em; }
+  .panel .big { display: block; width: 60%; margin: .4em auto; border: none; border-radius: .25em; padding: .45em; cursor: pointer;
+    font: inherit; font-size: 1.3em; background: rgba(255,255,255,.9); color: #2b4a40; }
+  #grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6em; max-height: 48vh; overflow-y: auto; padding: .2em; }
+  .lv { position: relative; border: none; border-radius: .25em; background: rgba(255,255,255,.12); cursor: pointer; padding: .3em;
+    aspect-ratio: 1.6; }
+  .lv canvas { position: static; width: 100%; height: 100%; }
+  .lv .n { position: absolute; left: .4em; top: .2em; color: #fff; font-size: .8em; opacity: .8; }
+  .lv .ok { position: absolute; right: .3em; bottom: .1em; color: #fff; font-size: 1.1em; }
+  .credit { opacity: .7; font-size: .75em; margin-top: .8em; }
+
+  /* ---------- phone (portrait) ---------- */
+  .portrait #side { left: 4%; right: 4%; top: 1.6%; bottom: auto; flex-direction: row; align-items: center; gap: .9em;
+    font-size: calc(var(--u) * 2.6); }
+  .portrait #lvLabel { margin-left: auto; font-size: 1.05em; }
+  .portrait #fs { display: none; }
+  .portrait #tip { top: 6.5%; font-size: calc(var(--u) * 2.5); padding: .5em 1.4em; min-width: 70%; }
+  .portrait #win { width: 64%; font-size: calc(var(--u) * 2.8); }
+  .portrait .panel { width: 88%; font-size: calc(var(--u) * 2.6); }
+  .portrait #grid { max-height: 58vh; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="cv"></canvas>
+  <div id="tip"></div>
+  <div id="side">
+    <button id="bRestart" title="Chơi lại"><svg viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 7.7 5.8l1.8-.6-1.1 5.3-4.3-3.4 1.7-.6A6 6 0 1 0 18 14h2.1A8 8 0 1 1 12 4z"/></svg></button>
+    <button id="bMusic" title="Nhạc"><svg viewBox="0 0 24 24"><path d="M9 4l11-2v13.5a3 3 0 1 1-2-2.8V6.3l-7 1.3v9.9a3 3 0 1 1-2-2.8z"/></svg></button>
+    <button id="bHome" title="Chọn level"><svg viewBox="0 0 24 24"><path d="M12 3l10 9h-3v9h-5v-6h-4v6H5v-9H2z"/></svg></button>
+    <div id="lvLabel">Level 1</div>
+  </div>
+  <button id="fs" title="Toàn màn hình"><svg viewBox="0 0 24 24"><path d="M3 3h7v2H5v5H3zm11 0h7v7h-2V5h-5zM3 14h2v5h5v2H3zm16 0h2v7h-7v-2h5z"/></svg></button>
+  <div id="win">
+    <div class="face">• •<br>‿</div>
+    <div class="msg">Everyone is happy!</div>
+    <div class="row">
+      <button id="wHome" title="Chọn level"><svg viewBox="0 0 24 24"><path d="M12 3l10 9h-3v9h-5v-6h-4v6H5v-9H2z"/></svg></button>
+      <button class="next" id="wNext">next</button>
+    </div>
+  </div>
+  <div id="menu">
+    <div class="panel" id="title">
+      <h1>PLUG IT IN</h1>
+      <h2>Kéo phích vào ổ cắm · Chạm để xoay</h2>
+      <button class="big" id="mPlay">Play</button>
+      <button class="big" id="mLevels">Levels</button>
+      <div class="credit">Prototype dựng lại từ video gameplay · Game gốc: Sam Feng &amp; Jose Salas</div>
+    </div>
+    <div class="panel" id="picker" style="display:none">
+      <h2>Pick a level to play!</h2>
+      <div id="grid"></div>
+      <button class="big" id="mBack" style="width:40%">Back</button>
+    </div>
+  </div>
+</div>
+
+<script src="levels.js"></script>
+<script>
+"use strict";
+const { LEVELS, fits, plugShape, holes } = PLUG;
+
+// ======================================================================
+//  World, in logical px with 72 px cells:
+//    landscape 1280 x 720, 17 x 10 grid, panel at row 3
+//    portrait   720 x 1280, 10 x 13 grid, panel at row 5, loose plugs below
+//  (tools/solve.js checks the levels against both grids)
+// ======================================================================
+const C = 72;
+let W, H, COLS, ROWS, GX, GY, PANEL_ROW, MID_COL, PORTRAIT = null;
+const stage = document.getElementById("stage");
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let scale = 1, DPR = 1;
+
+function setOrientation(portrait) {
+  PORTRAIT = portrait;
+  if (portrait) { W = 720; H = 1280; COLS = 10; ROWS = 13; PANEL_ROW = 5; MID_COL = 5; }
+  else { W = 1280; H = 720; COLS = 17; ROWS = 10; PANEL_ROW = 3; MID_COL = 8; }
+  GX = (W - COLS * C) / 2; GY = 0;
+  stage.classList.toggle("portrait", portrait);
+}
+
+function layout() {
+  const portrait = innerHeight > innerWidth;
+  if (portrait !== PORTRAIT) {
+    setOrientation(portrait);
+    if (G) loadLevel(levelIndex);              // re-lay the level for the new grid
+  }
+  const ar = W / H;
+  const w = Math.min(innerWidth, innerHeight * ar), h = w / ar;
+  stage.style.width = w + "px"; stage.style.height = h + "px";
+  stage.style.setProperty("--u", (Math.min(w, h) / 56.25) + "px");
+  DPR = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.round(w * DPR); cv.height = Math.round(h * DPR);
+  scale = cv.width / W;
+}
+addEventListener("resize", layout);
+
+// ---------- colours ----------
+function rgb2hsl([r, g, b]) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+const hsl = (h, s, l, a = 1) => `hsla(${h},${Math.round(s * 100)}%,${Math.round(l * 100)}%,${a})`;
+let PAL = {};
+function makePalette(bg) {
+  const [h, s, l] = rgb2hsl(bg);
+  PAL = {
+    bg: `rgb(${bg})`, h, s, l,
+    panel: hsl(h, s * .45, l * .32), panelEdge: hsl(h, s * .45, l * .24), blank: hsl(h, s * .4, l * .38),
+    socket: hsl(h, s * .5, .1), hole: hsl(h, s * .6, Math.min(.8, l * .9)),
+    loose: hsl(h, s * .55, .93), looseEdge: hsl(h, s * .4, .72), pin: hsl(h, s * .5, l * .45),
+    plugged: (i) => { const dh = [0, -28, 22][i % 3]; return hsl(h + dh, Math.min(1, s * .9 + .1), l * .74); },
+    pluggedEdge: (i) => { const dh = [0, -28, 22][i % 3]; return hsl(h + dh, Math.min(1, s * .9 + .1), l * .55); },
+    cable: (i) => { const dh = [0, -28, 22][i % 3]; return hsl(h + dh, Math.min(1, s * .8 + .1), l * .7); },
+  };
+  document.body.style.setProperty("--page", "#86c57a");
+}
+
+// ======================================================================
+//  Sound (synthesised, no files)
+// ======================================================================
+let AC = null, musicOn = false, musicTimer = 0;
+function audio() { if (!AC) try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} return AC; }
+function tone(freq, dur, type = "sine", vol = .15, when = 0, slide = 0) {
+  const a = audio(); if (!a) return;
+  const t = a.currentTime + when, o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(freq * slide, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t + dur + .02);
+}
+const SFX = {
+  pick: () => tone(520, .06, "triangle", .1),
+  drop: () => tone(260, .08, "triangle", .1),
+  rotate: () => tone(700, .05, "square", .04),
+  plug: () => { tone(180, .07, "square", .08); tone(880, .12, "sine", .1, .05); },
+  zap: () => tone(1500, .05, "sawtooth", .025, 0, .5),
+  win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, .25, "triangle", .12, i * .09)),
+};
+const SCALE = [261.6, 293.7, 329.6, 392, 440, 523.3, 587.3];
+function musicTick() {
+  if (!musicOn) return;
+  const f = SCALE[Math.random() * SCALE.length | 0];
+  tone(f / 2, 1.6, "sine", .05); if (Math.random() < .5) tone(f, .9, "triangle", .025, .4);
+  musicTimer = setTimeout(musicTick, 700 + Math.random() * 500);
+}
+
+// ======================================================================
+//  Game state
+// ======================================================================
+let G = null, levelIndex = 0;
+const SAVE = "plug-it-in-proto";
+let done = {};
+try { done = JSON.parse(localStorage.getItem(SAVE) || "{}"); } catch (e) { done = {}; }
+const persist = () => { try { localStorage.setItem(SAVE, JSON.stringify(done)); } catch (e) {} };
+
+const cellCenter = (cx, cy) => [GX + (cx + .5) * C, GY + (cy + .5) * C];
+
+function loadLevel(i) {
+  levelIndex = i;
+  const L = LEVELS[i];
+  makePalette(L.bg);
+  const pw = Math.max(...L.panel.map(c => c[0])) + 1;
+  const ox = MID_COL - Math.floor(pw / 2), oy = PANEL_ROW;
+  G = {
+    L, won: false, drag: null, bolts: [], confetti: [], t: 0,
+    panel: L.panel.map(([x, y, t, r]) => ({ x: x + ox, y: y + oy, type: t, rot: r })),
+    plugs: [],
+  };
+  L.plugs.forEach(def => addPlug(def));
+  layoutHome();
+  document.getElementById("lvLabel").textContent = "Level " + (i + 1);
+  const tip = document.getElementById("tip");
+  tip.textContent = L.tip || ""; tip.style.display = L.tip ? "block" : "none";
+  document.getElementById("win").classList.remove("on");
+  document.getElementById("menu").classList.add("hide");
+}
+
+function addPlug(def) {
+  const p = { def, id: G.plugs.length, rot: 0, plugged: false, host: null, layer: 0, x: 0, y: 0, homeX: 0,
+    vx: 0, vy: 0, spin: 0, sad: Math.random() * 6 };
+  G.plugs.push(p);
+  return p;
+}
+
+// lay unplugged plugs side by side along the bottom (like the video); on a phone
+// they wrap into several rows stacked upwards
+function layoutHome(onlyNew) {
+  const list = G.plugs.filter(p => !onlyNew || p.homeX === 0);
+  const gap = PORTRAIT ? 16 : 26, left = PORTRAIT ? 24 : 170, maxW = W - left - 24;
+  const rows = [[]];
+  let rowW = -gap;
+  for (const p of G.plugs) {
+    const w = p.def.w * C;
+    if (rowW + gap + w > maxW && rows[rows.length - 1].length) { rows.push([]); rowW = -gap; }
+    rows[rows.length - 1].push(p); rowW += gap + w;
+  }
+  let bottom = H - 18;
+  for (const row of rows) {
+    const total = row.reduce((a, p) => a + p.def.w * C + gap, -gap);
+    let x = Math.max(left, W / 2 - total / 2);
+    for (const p of row) {
+      const w = p.def.w * C;
+      if (list.includes(p)) {
+        p.rot = 0; p.plugged = false;
+        p.x = x + (p.def.pin[0] + .5) * C;
+        p.y = bottom - (p.def.h - p.def.pin[1] - .5) * C;
+        p.homeX = x + w / 2;
+      }
+      x += w + gap;
+    }
+    bottom -= Math.max(...row.map(p => p.def.h)) * C + 24;
+  }
+}
+
+// ---------- geometry ----------
+function shapeOf(p) { return plugShape(p.def, p.rot); }
+function plugCellsPx(p, x = p.x, y = p.y) {          // cell centres in px
+  return shapeOf(p).cells.map(([dx, dy]) => [x + dx * C, y + dy * C]);
+}
+function plugCellsGrid(p, cx, cy, rot = p.rot) {
+  return plugShape(p.def, rot).cells.map(([dx, dy]) => [cx + dx, cy + dy]);
+}
+const toCell = (px, py) => [Math.floor((px - GX) / C), Math.floor((py - GY) / C)];
+
+// all sockets: wall outlets (layer 0) + additional outlets on plugged plugs
+function allSockets() {
+  const out = G.panel.filter(c => c.type !== "x").map(c => ({ x: c.x, y: c.y, type: c.type, rot: c.rot, layer: 0, owner: null }));
+  for (const p of G.plugs) {
+    if (!p.plugged) continue;
+    const [cx, cy] = toCell(p.x, p.y);
+    for (const s of shapeOf(p).sockets) out.push({ x: cx + s.x, y: cy + s.y, type: s.type, rot: s.rot, layer: p.layer, owner: p });
+  }
+  return out;
+}
+const sockKey = (s) => `${s.x},${s.y},${s.layer}`;
+function socketUser(s) { return G.plugs.find(p => p.plugged && p.host && sockKey(p.host) === sockKey(s)); }
+function ancestors(owner) { const a = new Set(); for (let o = owner; o; o = o.host && o.host.owner) a.add(o); return a; }
+
+// Can plug p (with rotation rot) go into the socket at cell (cx, cy)?
+function findHost(p, cx, cy, rot = p.rot) {
+  const s = plugShape(p.def, rot);
+  const cands = allSockets().filter(so => so.x === cx && so.y === cy && so.owner !== p).sort((a, b) => b.layer - a.layer);
+  if (!cands.length) return null;
+  const host = cands[0];                                   // only the topmost socket on that cell is reachable
+  const user = socketUser(host);
+  if (user && user !== p) return null;
+  if (!fits(s.pinType, s.pinRot, host.type, host.rot)) return null;
+  const cells = s.cells.map(([dx, dy]) => [cx + dx, cy + dy]);
+  if (cells.some(([x, y]) => x < 0 || y < 0 || x >= COLS || y >= ROWS)) return null;
+  // a plug may only lie on top of the plugs it is (indirectly) plugged into
+  const anc = ancestors(host.owner);
+  for (const q of G.plugs) {
+    if (q === p || !q.plugged || anc.has(q)) continue;
+    const [qx, qy] = toCell(q.x, q.y);
+    const qc = new Set(plugCellsGrid(q, qx, qy).map(c => c + ""));
+    if (cells.some(c => qc.has(c + ""))) return null;
+  }
+  return host;
+}
+
+function unplug(p) {
+  if (!p.plugged) return;
+  p.plugged = false; p.host = null; p.layer = 0;
+  for (const q of G.plugs) if (q.plugged && q.host && q.host.owner === p) { unplug(q); q.vy = 1; }   // children fall off
+}
+
+function plugInto(p, host) {
+  const [px, py] = cellCenter(host.x, host.y);
+  p.anim = { fx: p.x, fy: p.y, t: 0 };
+  p.x = px; p.y = py; p.plugged = true; p.host = host; p.layer = host.layer + 1;
+  SFX.plug();
+  for (let i = 0; i < 6; i++) G.bolts.push(spark(px, py, true));
+  if (G.L.sandbox && G.plugs.every(q => q.plugged)) {
+    addPlug({ w: 1, h: 2, pin: [0, 0, "2", 0] });
+    layoutHome(true);
+  }
+  checkWin();
+}
+
+function checkWin() {
+  if (G.won || G.L.sandbox) return;
+  if (!G.plugs.every(p => p.plugged)) return;
+  G.won = true;
+  done[levelIndex] = true; persist();
+  setTimeout(() => {
+    SFX.win();
+    document.getElementById("win").classList.add("on");
+    for (let i = 0; i < 70; i++) G.confetti.push({ x: W / 2, y: H / 2, vx: (Math.random() - .5) * 14, vy: (Math.random() - .5) * 14 - 3,
+      r: Math.random() * 6, life: 2 + Math.random(), col: ["#ffe14d", "#59f0ff", "#4dff7a", "#ff7ad9", "#ffffff"][Math.random() * 5 | 0] });
+  }, 450);
+}
+
+// ======================================================================
+//  Input: drag to move, click to rotate
+// ======================================================================
+function evPt(e) {
+  const r = cv.getBoundingClientRect();
+  return [(e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H];
+}
+function drawOrder() {
+  // panel first, then plugged plugs by layer, then loose plugs, dragged last
+  return [...G.plugs].sort((a, b) => (a.plugged ? a.layer : 100) - (b.plugged ? b.layer : 100));
+}
+function hitPlug(x, y) {
+  const order = drawOrder();
+  for (let i = order.length - 1; i >= 0; i--) {
+    const p = order[i];
+    if (plugCellsPx(p).some(([cx, cy]) => Math.abs(x - cx) <= C / 2 && Math.abs(y - cy) <= C / 2)) return p;
+  }
+  return null;
+}
+
+cv.addEventListener("pointerdown", (e) => {
+  if (!G || G.won) return;
+  audio();
+  const [x, y] = evPt(e);
+  const p = hitPlug(x, y);
+  if (!p) return;
+  cv.setPointerCapture(e.pointerId);
+  G.drag = { p, sx: x, sy: y, ox: p.x - x, oy: p.y - y, moved: false, wasPlugged: p.plugged, t0: performance.now() };
+});
+cv.addEventListener("pointermove", (e) => {
+  const d = G && G.drag; if (!d) return;
+  const [x, y] = evPt(e);
+  if (!d.moved && Math.hypot(x - d.sx, y - d.sy) > 8) {
+    d.moved = true;
+    unplug(d.p);
+    SFX.pick();
+  }
+  if (d.moved) { d.p.x = x + d.ox; d.p.y = y + d.oy; }
+});
+function endDrag() {
+  const d = G && G.drag; if (!d) return;
+  G.drag = null;
+  const p = d.p;
+  if (!d.moved) { rotatePlug(p); return; }
+  const [cx, cy] = toCell(p.x, p.y);
+  const host = findHost(p, cx, cy);
+  if (host) plugInto(p, host);
+  else { settleLoose(p); SFX.drop(); }
+}
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+function rotatePlug(p) {
+  SFX.rotate();
+  p.spin = Math.PI / 2;                                  // animate from the previous orientation
+  if (p.plugged) {
+    const host = p.host, [cx, cy] = [host.x, host.y];
+    unplug(p);
+    p.rot = (p.rot + 1) % 4;
+    const h = findHost(p, cx, cy);
+    if (h) { p.plugged = true; p.host = h; p.layer = h.layer + 1; SFX.plug(); checkWin(); }
+    else { p.y += C * .25; settleLoose(p); }             // doesn't fit this way round: pops out
+  } else {
+    p.rot = (p.rot + 1) % 4;
+    settleLoose(p);
+  }
+}
+
+// keep loose plugs on screen
+function settleLoose(p) {
+  const cs = plugCellsPx(p);
+  const minX = Math.min(...cs.map(c => c[0])) - C / 2, maxX = Math.max(...cs.map(c => c[0])) + C / 2;
+  const minY = Math.min(...cs.map(c => c[1])) - C / 2, maxY = Math.max(...cs.map(c => c[1])) + C / 2;
+  if (minX < 0) p.x -= minX; if (maxX > W) p.x -= maxX - W;
+  if (minY < 0) p.y -= minY; if (maxY > H + C * .6) p.y -= maxY - H - C * .6;
+}
+
+// ======================================================================
+//  Rendering
+// ======================================================================
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+
+const HOLE_POS = { L: [-.2, 0], R: [.2, 0], U: [0, -.2], D: [0, .2] };
+function drawHoles(cx, cy, type, rot, color, size, asPins) {
+  const hs = holes(type, rot);
+  ctx.fillStyle = color;
+  for (const d of hs) {
+    const [hx, hy] = HOLE_POS[d];
+    if (type === "4") {                                  // cross: little bars
+      const horiz = d === "L" || d === "R";
+      ctx.fillRect(cx + hx * C - (horiz ? size * 1.4 : size * .55), cy + hy * C - (horiz ? size * .55 : size * 1.4),
+                   horiz ? size * 2.8 : size * 1.1, horiz ? size * 1.1 : size * 2.8);
+    } else {
+      // the 3-pin face sits a little higher so it reads as two eyes + a mouth
+      const lift = type === "3" ? -.05 * C : 0;
+      const [ox, oy] = type === "3" ? rotOff(0, lift, rot) : [0, 0];
+      ctx.beginPath(); ctx.arc(cx + hx * C + ox, cy + hy * C + oy, size, 0, 7); ctx.fill();
+    }
+  }
+}
+function rotOff(x, y, rot) { for (let i = 0; i < rot; i++) [x, y] = [-y, x]; return [x, y]; }
+
+function drawPanel() {
+  const e = 6;
+  ctx.fillStyle = "rgba(0,0,0,.12)";
+  for (const c of G.panel) ctx.fillRect(GX + c.x * C - e + 4, GY + c.y * C - e + 8, C + e * 2, C + e * 2);
+  ctx.fillStyle = PAL.panelEdge;
+  for (const c of G.panel) ctx.fillRect(GX + c.x * C - e, GY + c.y * C - e + 4, C + e * 2, C + e * 2);
+  for (const c of G.panel) {
+    ctx.fillStyle = c.type === "x" ? PAL.blank : PAL.panel;
+    ctx.fillRect(GX + c.x * C - e, GY + c.y * C - e, C + e * 2, C + e * 2);
+  }
+  for (const c of G.panel) {
+    if (c.type === "x") continue;
+    drawSocket(GX + (c.x + .5) * C, GY + (c.y + .5) * C, c.type, c.rot);
+  }
+}
+function drawSocket(cx, cy, type, rot) {
+  const s = C * .7;
+  rr(cx - s / 2, cy - s / 2, s, s, 5); ctx.fillStyle = PAL.socket; ctx.fill();
+  drawHoles(cx, cy, type, rot, PAL.hole, C * .045);
+}
+
+function plugColors(p) {
+  return p.plugged ? [PAL.plugged(p.id), PAL.pluggedEdge(p.id)] : [PAL.loose, PAL.looseEdge];
+}
+
+function drawCable(p, x, y) {
+  const s = shapeOf(p);
+  const [tx, ty] = [x + s.tail[0] * C, y + s.tail[1] * C];
+  // direction the tail points (from pin towards tail)
+  let dx = s.tail[0], dy = s.tail[1]; const m = Math.hypot(dx, dy) || 1; dx /= m; dy /= m;
+  if (m < .01) { dx = 0; dy = 1; }
+  const [ax, ay] = [p.homeX, H + 30];
+  ctx.strokeStyle = p.plugged ? PAL.cable(p.id) : PAL.loose;
+  ctx.lineWidth = 9; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(tx, ty);
+  ctx.bezierCurveTo(tx + dx * 220, ty + dy * 220, ax, ay - 260, ax, ay);
+  ctx.stroke();
+}
+
+function drawPlug(p, x, y, alpha = 1, lifted = false) {
+  const s = shapeOf(p), [fill, edge] = plugColors(p);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate(x, y);
+  if (p.spin) ctx.rotate(-p.spin);
+  // body: plugs are rectangles, drawn as one block with a darker bottom lip
+  const xs = s.cells.map(c => c[0]), ys = s.cells.map(c => c[1]);
+  const bx = Math.min(...xs) * C - C / 2 + 4, by = Math.min(...ys) * C - C / 2 + 2;
+  const bw = (Math.max(...xs) - Math.min(...xs) + 1) * C - 8, bh = (Math.max(...ys) - Math.min(...ys) + 1) * C - 4;
+  const lip = 7;
+  if (lifted) { ctx.fillStyle = "rgba(0,0,0,.18)"; rr(bx + 6, by + 12, bw, bh, 4); ctx.fill(); }
+  ctx.fillStyle = edge; rr(bx, by + lip, bw, bh, 4); ctx.fill();
+  ctx.fillStyle = fill; rr(bx, by, bw, bh, 4); ctx.fill();
+  // extra outlets on the plug
+  for (const so of s.sockets) drawSocket(so.x * C, so.y * C, so.type, so.rot);
+  // the pins = the plug's face
+  drawHoles(0, 0, s.pinType, s.pinRot, p.plugged ? PAL.pluggedEdge(p.id) : PAL.pin, C * .05);
+  ctx.restore();
+}
+
+function spark(x, y, burst) {
+  const a = Math.random() * Math.PI * 2, r = burst ? 10 : 20 + Math.random() * 40;
+  return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r, a: Math.random() * Math.PI, life: burst ? .35 : .45, max: burst ? .35 : .45, s: burst ? 1.4 : 1 };
+}
+function drawBolt(b) {
+  ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.a); ctx.globalAlpha = Math.max(0, b.life / b.max);
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 2.2; ctx.beginPath();
+  const k = 7 * b.s; ctx.moveTo(-k, -2 * k); ctx.lineTo(0, -.2 * k); ctx.lineTo(-k * .4, .2 * k); ctx.lineTo(k * .6, 2 * k); ctx.stroke();
+  ctx.restore();
+}
+
+let last = performance.now(), boltClock = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!G) { ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.fillStyle = PAL.bg; ctx.fillRect(0, 0, W, H); return; }
+  G.t += dt;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  ctx.fillStyle = PAL.bg; ctx.fillRect(0, 0, W, H);
+
+  // background lightning around unpowered plugs
+  boltClock += dt;
+  if (boltClock > .12 && !G.won) {
+    boltClock = 0;
+    const loose = G.plugs.filter(p => !p.plugged && G.drag?.p !== p);
+    if (loose.length) {
+      const p = loose[Math.random() * loose.length | 0], cs = plugCellsPx(p), c = cs[Math.random() * cs.length | 0];
+      G.bolts.push(spark(c[0], c[1] - 10, false));
+      if (Math.random() < .15) SFX.zap();
+    }
+  }
+
+  drawPanel();
+  const order = drawOrder();
+  // cables under everything that is plugged, loose cables too
+  for (const p of order) {
+    let { x, y } = p;
+    if (p.anim) { const k = Math.min(1, p.anim.t), e = 1 - Math.pow(1 - k, 3); x = p.anim.fx + (p.x - p.anim.fx) * e; y = p.anim.fy + (p.y - p.anim.fy) * e; }
+    drawCable(p, x, y);
+  }
+  for (const p of order) {
+    if (G.drag && G.drag.p === p && G.drag.moved) continue;
+    let { x, y } = p;
+    if (p.anim) {
+      p.anim.t += dt * 7;
+      const k = Math.min(1, p.anim.t), e = 1 - Math.pow(1 - k, 3);
+      x = p.anim.fx + (p.x - p.anim.fx) * e; y = p.anim.fy + (p.y - p.anim.fy) * e;
+      if (k >= 1) p.anim = null;
+    }
+    if (p.vy) { p.y += p.vy * 3; p.vy *= .8; if (p.vy < .05) { p.vy = 0; settleLoose(p); } }
+    if (p.spin) p.spin = Math.max(0, p.spin - dt * 14);
+    drawPlug(p, x, y);
+  }
+  // dragged plug + snap preview
+  if (G.drag && G.drag.moved) {
+    const p = G.drag.p, [cx, cy] = toCell(p.x, p.y), host = findHost(p, cx, cy);
+    if (host) { const [hx, hy] = cellCenter(host.x, host.y); drawPlug(p, hx, hy, .35); }
+    drawPlug(p, p.x, p.y, .85, true);
+  }
+
+  G.bolts = G.bolts.filter(b => (b.life -= dt) > 0);
+  G.bolts.forEach(drawBolt);
+  G.confetti = G.confetti.filter(c => (c.life -= dt) > 0);
+  for (const c of G.confetti) {
+    c.x += c.vx; c.y += c.vy; c.vy += .25; c.vx *= .98; c.r += .1;
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.col; ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+  }
+}
+
+// ======================================================================
+//  UI
+// ======================================================================
+document.getElementById("bRestart").onclick = () => { SFX.rotate(); loadLevel(levelIndex); };
+document.getElementById("bHome").onclick = () => showMenu(true);
+document.getElementById("wHome").onclick = () => showMenu(true);
+document.getElementById("wNext").onclick = () => loadLevel(Math.min(LEVELS.length - 1, levelIndex + 1));
+document.getElementById("bMusic").onclick = (e) => {
+  musicOn = !musicOn; audio();
+  e.currentTarget.classList.toggle("off", !musicOn);
+  clearTimeout(musicTimer); if (musicOn) musicTick();
+};
+document.getElementById("bMusic").classList.add("off");
+document.getElementById("fs").onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen(); else stage.requestFullscreen?.().catch(() => {});
+};
+
+document.getElementById("mPlay").onclick = () => {
+  const next = LEVELS.findIndex((_, i) => !done[i]);
+  loadLevel(next < 0 ? 0 : next);
+};
+document.getElementById("mLevels").onclick = () => showMenu(true);
+document.getElementById("mBack").onclick = () => {
+  if (G) document.getElementById("menu").classList.add("hide");
+  else { document.getElementById("picker").style.display = "none"; document.getElementById("title").style.display = ""; }
+};
+
+function showMenu(picker) {
+  document.getElementById("menu").classList.remove("hide");
+  document.getElementById("title").style.display = picker ? "none" : "";
+  document.getElementById("picker").style.display = picker ? "" : "none";
+  document.getElementById("win").classList.remove("on");
+  document.getElementById("tip").style.display = "none";
+  if (picker) buildPicker();
+}
+
+function buildPicker() {
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement("button");
+    b.className = "lv";
+    const c = document.createElement("canvas"); c.width = 160; c.height = 100;
+    drawThumb(c.getContext("2d"), L, c.width, c.height);
+    b.appendChild(c);
+    b.insertAdjacentHTML("beforeend", `<span class="n">${i + 1}</span>${done[i] ? '<span class="ok">✓</span>' : ""}`);
+    b.onclick = () => loadLevel(i);
+    grid.appendChild(b);
+  });
+}
+function drawThumb(x, L, w, h) {
+  const [hh, s, l] = rgb2hsl(L.bg);
+  const xs = L.panel.map(c => c[0]), ys = L.panel.map(c => c[1]);
+  const pw = Math.max(...xs) + 1, ph = Math.max(...ys) + 1, cs = Math.min(16, (w - 20) / pw, (h - 20) / ph);
+  const ox = (w - pw * cs) / 2, oy = (h - ph * cs) / 2;
+  for (const [cx, cy, t] of L.panel) {
+    x.fillStyle = t === "x" ? hsl(hh, s * .2, .55) : hsl(hh, s * .1, .82);
+    x.fillRect(ox + cx * cs + 1, oy + cy * cs + 1, cs - 2, cs - 2);
+    if (t !== "x") { x.fillStyle = "rgba(0,0,0,.45)"; x.fillRect(ox + cx * cs + cs * .3, oy + cy * cs + cs * .3, cs * .4, cs * .4); }
+  }
+}
+
+layout();
+makePalette([160, 220, 200]);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

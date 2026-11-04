@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Perfect Bento Prototype</title>
+<style>
+  :root {
+    --wood: #a8604f;
+    --wood-dark: #5a2f25;
+    --cream: #fff6e6;
+    --green: #8fbf2a;
+    --ink: #3b1f18;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body { margin: 0; height: 100%; background: #2b1a16; overflow: hidden;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: var(--ink); }
+  #app { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    background: #b06a58 url(assets/bg.png) center/cover; overflow: hidden; touch-action: none; }
+  .screen { position: absolute; inset: 0; display: none; }
+  .screen.on { display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: absolute; left: 0; right: 0; top: 0; height: 13%;
+    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 0; }
+  .iconbtn { position: absolute; width: 11%; aspect-ratio: 1; border: none; cursor: pointer;
+    background: center/contain no-repeat; filter: drop-shadow(0 3px 0 rgba(0,0,0,.25)); }
+  .iconbtn:active { transform: scale(.92); }
+  #btnHome { left: 3%; top: 22%; background-image: url(assets/icon-home.png);
+    background-color: #f5d9a8; border-radius: 22%; background-size: 70%; border: 3px solid var(--wood-dark); }
+  /* frame-lv.png: light panel ≈ top 10–55%, dark star bar ≈ 60–88% of the height */
+  #lvFrame { position: relative; width: 30%; aspect-ratio: 396/272; background: url(assets/frame-lv.png) center/contain no-repeat; }
+  #lvFrame > * { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: center; }
+  #lvName { top: 11%; height: 20%; font-weight: 900; font-size: calc(var(--u) * 2.8); color: #fff;
+    -webkit-text-stroke: 1px var(--wood-dark); white-space: nowrap; }
+  #knifeRow { top: 31%; height: 26%; gap: .3em; font-weight: 900; font-size: calc(var(--u) * 4.6);
+    color: #fff; -webkit-text-stroke: 1.5px var(--wood-dark); }
+  #lvFrame.noknife #lvName { top: 14%; height: 42%; font-size: calc(var(--u) * 3.8); }
+  #lvFrame.noknife #knifeRow { display: none; }
+  #knifeRow img { height: 1.1em; }
+  #starRow { top: 60%; height: 28%; gap: 4%; padding: 0 22%; }
+  #starRow img { height: 78%; width: auto; transition: transform .25s; }
+  #starRow img.lost { filter: grayscale(1) brightness(.55); }
+
+  #tut { position: absolute; left: 6%; right: 6%; bottom: 14%; text-align: center; font-weight: 800;
+    font-size: calc(var(--u) * 3.6); color: #fff; background: rgba(59, 31, 24, .75); padding: .5em; border-radius: .8em;
+    display: none; pointer-events: none; z-index: 3; }
+
+  canvas { position: absolute; left: 0; top: 13%; width: 100%; height: 74%; touch-action: none; }
+
+  /* ---------- Bottom bar ---------- */
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; height: 13%; display: flex; align-items: center; justify-content: center; }
+  #btnHint { left: 5%; top: 18%; width: 13%; background-image: url(assets/icon-hint.png); }
+  #btnUndo { right: 5%; left: auto; top: 22%; background-image: url(assets/icon-undo.png); }
+  #btnCut { width: 40%; aspect-ratio: 464/190; border: none; background: url(assets/btn-gray.png) center/contain no-repeat;
+    font: 900 calc(var(--u) * 7) "Trebuchet MS", sans-serif; color: #fff; -webkit-text-stroke: 2px #555; cursor: pointer; padding-top: 2%; }
+  #btnCut.on { background-image: url(assets/btn-green.png); -webkit-text-stroke: 2px #3d6010; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { transform: scale(1.05); } }
+
+  /* ---------- Popups ---------- */
+  .modal { position: absolute; inset: 0; background: rgba(20, 10, 8, .72); display: none; align-items: center;
+    justify-content: center; flex-direction: column; z-index: 10; }
+  .modal.on { display: flex; }
+  .card { background: var(--cream); border: 4px solid var(--wood-dark); border-radius: 1.2em; padding: 4%;
+    width: 86%; text-align: center; box-shadow: 0 8px 0 rgba(0,0,0,.3); }
+  .btn { border: none; cursor: pointer; font: 900 calc(var(--u) * 3) "Trebuchet MS", sans-serif; color: #fff;
+    padding: .45em 1.2em; border-radius: .7em; background: var(--green); box-shadow: 0 5px 0 #4d7010; margin: .3em; }
+  .btn.alt { background: #e9a53b; box-shadow: 0 5px 0 #a76717; }
+  .btn:active { transform: translateY(3px); box-shadow: 0 2px 0 #4d7010; }
+
+  #win h1 { font-size: calc(var(--u) * 9); margin: 0; color: #fff; letter-spacing: .05em;
+    -webkit-text-stroke: 3px #2d4f8f; text-shadow: 0 6px 0 #2d4f8f; transform: scale(0); }
+  #win.on h1 { animation: pop .5s .1s forwards cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes pop { to { transform: scale(1); } }
+  #winStars { display: flex; justify-content: center; gap: 3%; margin: 4% 0; }
+  #winStars img { width: 20%; opacity: 0; transform: scale(2); transition: all .35s cubic-bezier(.3, 1.6, .5, 1); }
+  #winStars img.show { opacity: 1; transform: scale(1); }
+  #winStars img.off { filter: grayscale(1) brightness(.5); }
+  #winCoin { color: #fff; font-weight: 900; font-size: calc(var(--u) * 3.5); margin-bottom: 4%; display: flex; align-items: center; justify-content: center; gap: .3em; }
+  #winCoin img { height: 1.3em; }
+  #confetti { position: absolute; inset: 0; pointer-events: none; }
+
+  #hint .card { padding: 3%; }
+  #hintImg { width: 100%; border-radius: .6em; border: 3px solid var(--wood-dark); display: block; }
+  #hintPager { display: flex; justify-content: space-between; align-items: center; margin-top: 3%; font-weight: 800; font-size: calc(var(--u) * 2.6); }
+
+  /* ---------- Menu ---------- */
+  #menu { background: #b06a58 url(assets/bg.png) center/cover; }
+  #menu h2 { margin: 4% 0 2%; text-align: center; color: #fff; font-size: calc(var(--u) * 5.2);
+    -webkit-text-stroke: 2px var(--wood-dark); text-shadow: 0 4px 0 var(--wood-dark); }
+  #tabs { display: flex; gap: 1.5%; padding: 0 3%; }
+  #tabs button { flex: 1; border: 3px solid var(--wood-dark); border-radius: .6em .6em 0 0; background: #d8a978;
+    font: 800 calc(var(--u) * 2.3) "Trebuchet MS", sans-serif; padding: .5em 0; color: var(--ink); cursor: pointer; }
+  #tabs button.on { background: var(--cream); }
+  #grid { position: absolute; top: 17%; bottom: 7%; left: 3%; right: 3%; overflow-y: auto; background: var(--cream);
+    border: 3px solid var(--wood-dark); border-radius: 0 0 1em 1em; padding: 3%;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 2.5%; align-content: start; }
+  .lvbtn { aspect-ratio: 1; border: 3px solid var(--wood-dark); border-radius: .8em; background: #f2c98f; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; font: 900 calc(var(--u) * 3.2) "Trebuchet MS", sans-serif; color: var(--ink); padding: 0; }
+  .lvbtn.done { background: #bfe07a; }
+  .lvbtn small { font-size: .45em; letter-spacing: -.1em; color: #d08b00; height: 1.2em; }
+  .lvbtn .tags { font-size: .42em; font-weight: 700; color: #7a4a3a; height: 1.2em; }
+  #menuFoot { position: absolute; bottom: 1.5%; left: 0; right: 0; text-align: center; color: #fff; font-size: calc(var(--u) * 1.9); }
+  #menuFoot label { cursor: pointer; }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ================= LEVEL SELECT ================= -->
+  <div id="menu" class="screen on">
+    <h2>Perfect Bento</h2>
+    <div id="tabs"></div>
+    <div id="grid"></div>
+    <div id="menuFoot"><label><input type="checkbox" id="music"> Nhạc nền</label> · Prototype dựng từ level data gốc</div>
+  </div>
+
+  <!-- ================= GAME ================= -->
+  <div id="game" class="screen">
+    <div id="hud">
+      <button class="iconbtn" id="btnHome" title="Chọn level"></button>
+      <div id="lvFrame">
+        <div id="lvName">Lv.1-1</div>
+        <div id="knifeRow"><img src="assets/knife.png" alt=""><span id="knifeCount">x0</span></div>
+        <div id="starRow"><img src="assets/star.png" alt=""><img src="assets/star.png" alt=""><img src="assets/star.png" alt=""></div>
+      </div>
+    </div>
+    <div id="tut"></div>
+    <canvas id="cv"></canvas>
+    <div id="bar">
+      <button class="iconbtn" id="btnHint" title="Gợi ý"></button>
+      <button id="btnCut">Cắt</button>
+      <button class="iconbtn" id="btnUndo" title="Hoàn tác"></button>
+    </div>
+
+    <div id="win" class="modal">
+      <canvas id="confetti"></canvas>
+      <h1 id="winTitle">COOL</h1>
+      <div id="winStars" style="width:70%"><img src="assets/star.png"><img src="assets/star.png"><img src="assets/star.png"></div>
+      <div id="winCoin"><img src="assets/coin.png"> x100</div>
+      <div><button class="btn alt" id="btnReplay">Chơi lại</button><button class="btn" id="btnNext">Next</button></div>
+    </div>
+
+    <div id="hint" class="modal">
+      <div class="card">
+        <img id="hintImg" alt="hint">
+        <div id="hintPager"><button class="btn alt" id="hintPrev">‹</button><span id="hintPage">1/1</span><button class="btn alt" id="hintNext">›</button></div>
+        <button class="btn" id="hintClose">Đóng</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="levels.js"></script>
+<script>
+"use strict";
+// ======================================================================
+//  Assets
+// ======================================================================
+const IMG = {};
+function img(src) {
+  if (!IMG[src]) { const i = new Image(); i.src = src; IMG[src] = i; }
+  return IMG[src];
+}
+const riceImg = img("assets/rice.png");
+const boardImg = img("assets/board.png");
+const xImg = img("assets/x.png");
+const rotImg = img("assets/btn-rotate.png");
+const handImg = img("assets/hand.png");
+const toppingImg = (name, kind) => img(`assets/toppings/${kind}/${name}.png`);
+
+const SFX = {};
+for (const n of ["pick", "drop", "knife", "hold-cut", "drop-cut", "win", "star", "button"]) {
+  const a = new Audio(`assets/sfx/${n}.ogg`); a.preload = "auto"; SFX[n] = a;
+}
+function sfx(n, vol = 0.8) {
+  try { const a = SFX[n].cloneNode(); a.volume = vol; a.play().catch(() => {}); } catch (e) {}
+}
+const bgm = new Audio("assets/sfx/bgm.ogg"); bgm.loop = true; bgm.volume = 0.35;
+
+// ======================================================================
+//  Progress (per-viewer convenience only)
+// ======================================================================
+const SAVE_KEY = "perfect-bento-proto";
+let save = {};
+try { save = JSON.parse(localStorage.getItem(SAVE_KEY) || "{}"); } catch (e) { save = {}; }
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+const levelKey = (L) => L.mode === "daily" ? `D${L.lv}` : `C${L.ch}-${L.lv}`;
+
+// ======================================================================
+//  Layout
+// ======================================================================
+const app = document.getElementById("app");
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+let DPR = 1;
+function layout() {
+  const h = Math.min(innerHeight, innerWidth * 16 / 9);
+  const w = h * 9 / 16;
+  app.style.width = w + "px"; app.style.height = h + "px";
+  app.style.setProperty("--u", (w / 100) + "px");
+  DPR = Math.min(2, devicePixelRatio || 1);
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.round(r.width * DPR); cv.height = Math.round(r.height * DPR);
+  if (G) computeBoardRect();
+}
+addEventListener("resize", layout);
+
+// ======================================================================
+//  Game state
+//  Board coordinates: col to the right, row downwards, one unit = one cell.
+//  piece = {x, y, cells:[{dx,dy,t,r}], cuts:Set("dx,dy,R|D")}
+//  tray  = {x, y, cells:[{dx,dy,t,r}]}
+//  knife = {x, y, dir:'h'|'v', len, canRot}   (x,y = start grid vertex)
+// ======================================================================
+let G = null;
+let levelIndex = 0;
+
+function loadLevel(i) {
+  levelIndex = i;
+  const L = LEVELS[i];
+  const baseCols = L.big ? 8 : 6, baseRows = L.big ? 12 : 10;
+
+  // 1) everything into Unity grid coords (cell = integer gx,gy; y up)
+  const snap = (v) => Math.round(v - 0.5);
+  const shapes = L.shapes.map(s => ({ ox: snap(s.p[0]), oy: snap(s.p[1]), c: s.c }));
+  const trays = L.trays.map(s => ({ ox: snap(s.p[0]), oy: snap(s.p[1]), c: s.c }));
+  const knives = L.knives.map(k => {
+    const h = Math.round(k.r) % 180 === 0;
+    return h ? { h, x0: Math.round(k.p[0] - k.n / 2), y0: Math.round(k.p[1]), n: k.n, rot: k.rot }
+             : { h, x0: Math.round(k.p[0]), y0: Math.round(k.p[1] - k.n / 2), n: k.n, rot: k.rot };
+  });
+  let minX = 1e9, maxX = -1e9, minY = 1e9, maxY = -1e9;
+  const grow = (x, y) => { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); };
+  for (const s of shapes.concat(trays)) for (const c of s.c) grow(s.ox + c[0], s.oy + c[1]);
+  for (const k of knives) {
+    if (k.h) { grow(k.x0, k.y0); grow(k.x0 + k.n - 1, k.y0 - 1); }
+    else { grow(k.x0, k.y0); grow(k.x0 - 1, k.y0 + k.n - 1); }
+  }
+  const spanX = maxX - minX + 1, spanY = maxY - minY + 1;
+  // keep the real board size; content that sticks out is nudged back in by resolveOverlaps()
+  const cols = baseCols, rows = baseRows;
+  let tMinX = 1e9, tMaxY = -1e9;
+  for (const t of trays) for (const c of t.c) { tMinX = Math.min(tMinX, t.ox + c[0]); tMaxY = Math.max(tMaxY, t.oy + c[1]); }
+  let offX = Math.floor((cols - spanX) / 2), offY = Math.floor((rows - spanY) / 2);
+  if (spanX > cols) offX = Math.min(0, -(tMinX - minX) + 1);   // make sure the tray stays on the board
+  if (spanY > rows) offY = Math.min(0, -(maxY - tMaxY) + 1);
+  const toCol = (gx) => gx - minX + offX;
+  const toRow = (gy) => maxY - gy + offY;
+
+  // 2) convert to board coordinates
+  G = {
+    L, cols, rows, cutsUsed: 0, stars: 3, history: [], won: false,
+    trays: trays.map(t => ({ x: toCol(t.ox), y: toRow(t.oy),
+      cells: t.c.map(c => ({ dx: c[0], dy: -c[1], t: c[2] || null, r: c[3] || 0 })) })),
+    pieces: shapes.map(s => ({ x: toCol(s.ox), y: toRow(s.oy),
+      cells: s.c.map(c => ({ dx: c[0], dy: -c[1], t: c[2] || null, r: c[3] || 0 })), cuts: new Set() })),
+    knives: knives.map(k => k.h
+      ? { dir: "h", x: toCol(k.x0), y: maxY - k.y0 + 1 + offY, len: k.n, canRot: k.rot }
+      : { dir: "v", x: toCol(k.x0), y: maxY - (k.y0 + k.n) + 1 + offY, len: k.n, canRot: k.rot }),
+    drag: null, fx: [], slashes: [], flyStars: [], ghost: null, tutT: 0,
+  };
+  resolveOverlaps();
+  computeBoardRect();
+  updateHud();
+  document.getElementById("win").classList.remove("on");
+  const tut = document.getElementById("tut");
+  const msg = L.tut === "drag" ? "Kéo miếng cơm vào khay cho thật khít!"
+    : L.tut === "cut" ? "Kéo dao lên miếng cơm, rồi bấm CẮT"
+    : L.mode === "daily" ? "Daily: chạm miếng cơm để xoay, kéo để lấp kín hộp" : "";
+  tut.textContent = msg; tut.style.display = msg ? "block" : "none";
+  showScreen("game");
+}
+
+// Data positions of daily levels (and a few story levels) are not grid-snapped
+// in the prefab; nudge anything overlapping or off-board to the nearest free spot.
+function resolveOverlaps() {
+  const occ = new Set();
+  const key = (c, r) => c + "," + r;
+  const fits = (obj, x, y) => obj.cells.every(c => {
+    const cc = x + c.dx, rr = y + c.dy;
+    return cc >= 0 && rr >= 0 && cc < G.cols && rr < G.rows && !occ.has(key(cc, rr));
+  });
+  const claim = (obj) => obj.cells.forEach(c => occ.add(key(obj.x + c.dx, obj.y + c.dy)));
+  for (const obj of [...G.trays, ...G.pieces]) {
+    if (!fits(obj, obj.x, obj.y)) {
+      let best = null, bd = 1e9;
+      for (let y = 0; y < G.rows; y++) for (let x = 0; x < G.cols; x++) {
+        if (!fits(obj, x, y)) continue;
+        const d = Math.abs(x - obj.x) + Math.abs(y - obj.y);
+        if (d < bd) { bd = d; best = [x, y]; }
+      }
+      if (best) { obj.x = best[0]; obj.y = best[1]; }
+    }
+    claim(obj);
+  }
+  for (const k of G.knives) {
+    k.x = Math.max(0, Math.min(k.dir === "h" ? G.cols - k.len : G.cols, k.x));
+    k.y = Math.max(0, Math.min(k.dir === "h" ? G.rows : G.rows - k.len, k.y));
+  }
+}
+
+// ---------- geometry helpers ----------
+let BR = { x: 0, y: 0, cs: 40 };   // board rect in canvas px
+function computeBoardRect() {
+  const pad = cv.width * 0.06;
+  const cs = Math.min((cv.width - pad * 2) / G.cols, (cv.height - pad * 1.2) / G.rows);
+  BR = { cs, x: (cv.width - cs * G.cols) / 2, y: (cv.height - cs * G.rows) / 2 };
+}
+const px = (c) => BR.x + c * BR.cs;
+const py = (r) => BR.y + r * BR.cs;
+
+function pieceAt(col, row, skip) {
+  for (let i = G.pieces.length - 1; i >= 0; i--) {
+    const p = G.pieces[i];
+    if (p === skip) continue;
+    for (const c of p.cells) if (p.x + c.dx === col && p.y + c.dy === row) return { p, c };
+  }
+  return null;
+}
+function trayAt(col, row) {
+  for (const t of G.trays) for (const c of t.cells) if (t.x + c.dx === col && t.y + c.dy === row) return { t, c };
+  return null;
+}
+function pieceInTray(p, t) {
+  return p.cells.every(c => { const h = trayAt(p.x + c.dx, p.y + c.dy); return h && h.t === t; });
+}
+function hasCell(p, dx, dy) { return p.cells.some(c => c.dx === dx && c.dy === dy); }
+function connected(p, c, side) {   // side: R, L, D, U
+  const n = { R: [1, 0], L: [-1, 0], D: [0, 1], U: [0, -1] }[side];
+  if (!hasCell(p, c.dx + n[0], c.dy + n[1])) return false;
+  const k = side === "R" ? `${c.dx},${c.dy},R` : side === "L" ? `${c.dx - 1},${c.dy},R`
+          : side === "D" ? `${c.dx},${c.dy},D` : `${c.dx},${c.dy - 1},D`;
+  return !p.cuts.has(k);
+}
+
+// ---------- placement rules ----------
+function canPlacePiece(p, x, y, self = p) {
+  let onTray = 0, tray = null;
+  for (const c of p.cells) {
+    const col = x + c.dx, row = y + c.dy;
+    if (col < 0 || row < 0 || col >= G.cols || row >= G.rows) return false;
+    if (pieceAt(col, row, self)) return false;
+    const h = trayAt(col, row);
+    if (h) { onTray++; if (tray && tray !== h.t) return false; tray = h.t; }
+  }
+  // a rice piece is either completely inside one tray or completely outside
+  return onTray === 0 || onTray === p.cells.length;
+}
+function canPlaceTray(t, x, y, carried) {
+  for (const c of t.cells) {
+    const col = x + c.dx, row = y + c.dy;
+    if (col < 0 || row < 0 || col >= G.cols || row >= G.rows) return false;
+    const hit = pieceAt(col, row);
+    if (hit && !carried.includes(hit.p)) return false;
+    for (const o of G.trays) if (o !== t && o.cells.some(oc => o.x + oc.dx === col && o.y + oc.dy === row)) return false;
+  }
+  return true;
+}
+
+// ---------- knives ----------
+function knifeEdges(k) {
+  // returns [{p, key}] of rice adjacencies this knife would cut
+  const out = [];
+  for (let i = 0; i < k.len; i++) {
+    let a, b, side;
+    if (k.dir === "h") { a = [k.x + i, k.y - 1]; b = [k.x + i, k.y]; side = "D"; }
+    else { a = [k.x - 1, k.y + i]; b = [k.x, k.y + i]; side = "R"; }
+    const ha = pieceAt(a[0], a[1]), hb = pieceAt(b[0], b[1]);
+    if (ha && hb && ha.p === hb.p && connected(ha.p, ha.c, side)) out.push({ p: ha.p, key: `${ha.c.dx},${ha.c.dy},${side}` });
+  }
+  return out;
+}
+function canCut() { return !G.won && G.knives.some(k => knifeEdges(k).length > 0); }
+
+function doCut() {
+  if (!canCut()) return;
+  pushHistory();
+  for (const k of G.knives) {
+    const edges = knifeEdges(k);
+    if (!edges.length) continue;
+    for (const e of edges) e.p.cuts.add(e.key);
+    G.cutsUsed++;
+    if (G.cutsUsed > G.L.cuts && G.stars > 1) {
+      G.stars--;
+      G.flyStars.push({ i: G.stars, t: 0 });
+      sfx("star");
+    }
+    G.slashes.push({ k: { ...k }, t: 0 });
+    for (let i = 0; i < 18; i++) {
+      const s = Math.random() * k.len;
+      const cx = k.dir === "h" ? k.x + s : k.x, cy = k.dir === "h" ? k.y : k.y + s;
+      G.fx.push({ x: cx, y: cy, vx: (Math.random() - .5) * 0.12, vy: (Math.random() - .5) * 0.12, life: 1 });
+    }
+  }
+  splitPieces();
+  sfx("knife");
+  if (navigator.vibrate) try { navigator.vibrate(20); } catch (e) {}
+  updateHud();
+  checkWin();
+}
+
+function splitPieces() {
+  const next = [];
+  for (const p of G.pieces) {
+    const seen = new Set(), comps = [];
+    for (const c of p.cells) {
+      const id = c.dx + "," + c.dy;
+      if (seen.has(id)) continue;
+      const comp = [], stack = [c]; seen.add(id);
+      while (stack.length) {
+        const cur = stack.pop(); comp.push(cur);
+        for (const [side, ddx, ddy] of [["R", 1, 0], ["L", -1, 0], ["D", 0, 1], ["U", 0, -1]]) {
+          if (!connected(p, cur, side)) continue;
+          const nb = p.cells.find(o => o.dx === cur.dx + ddx && o.dy === cur.dy + ddy);
+          const nid = nb.dx + "," + nb.dy;
+          if (!seen.has(nid)) { seen.add(nid); stack.push(nb); }
+        }
+      }
+      comps.push(comp);
+    }
+    if (comps.length === 1) { next.push(p); continue; }
+    for (const comp of comps) {
+      const ids = new Set(comp.map(c => c.dx + "," + c.dy));
+      const cuts = new Set([...p.cuts].filter(k => { const [x, y] = k.split(","); return ids.has(x + "," + y); }));
+      next.push({ x: p.x, y: p.y, cells: comp, cuts, pop: 1 });
+    }
+  }
+  G.pieces = next;
+}
+
+// ---------- history ----------
+function snapshot() {
+  return JSON.stringify({
+    pieces: G.pieces.map(p => ({ x: p.x, y: p.y, cells: p.cells, cuts: [...p.cuts] })),
+    trays: G.trays.map(t => ({ x: t.x, y: t.y })),
+    knives: G.knives, cutsUsed: G.cutsUsed, stars: G.stars,
+  });
+}
+function pushHistory() { G.history.push(snapshot()); if (G.history.length > 200) G.history.shift(); }
+function undo() {
+  if (!G.history.length || G.won) return;
+  const s = JSON.parse(G.history.pop());
+  G.pieces = s.pieces.map(p => ({ ...p, cuts: new Set(p.cuts) }));
+  s.trays.forEach((t, i) => { G.trays[i].x = t.x; G.trays[i].y = t.y; });
+  G.knives = s.knives; G.cutsUsed = s.cutsUsed; G.stars = s.stars;
+  sfx("button");
+  updateHud();
+}
+
+// ---------- win ----------
+function trayStatus(t) {
+  let filled = 0, wrong = 0;
+  for (const c of t.cells) {
+    const h = pieceAt(t.x + c.dx, t.y + c.dy);
+    if (!h) continue;
+    filled++;
+    if ((h.c.t || null) !== (c.t || null)) wrong++;
+  }
+  return { filled, wrong, total: t.cells.length };
+}
+function checkWin() {
+  if (G.won) return;
+  const ok = G.trays.every(t => { const s = trayStatus(t); return s.filled === s.total && s.wrong === 0; });
+  if (!ok) return;
+  G.won = true;
+  document.getElementById("tut").style.display = "none";
+  const k = levelKey(G.L);
+  save[k] = Math.max(save[k] || 0, G.stars); persist();
+  for (const t of G.trays) for (const c of t.cells)
+    for (let i = 0; i < 4; i++) G.fx.push({ x: t.x + c.dx + Math.random(), y: t.y + c.dy + Math.random(),
+      vx: (Math.random() - .5) * .05, vy: -Math.random() * .06, life: 1.4, gold: true });
+  setTimeout(showWin, 900);
+}
+function showWin() {
+  sfx("win");
+  const w = document.getElementById("win");
+  document.getElementById("winTitle").textContent = ["", "COOL", "GREAT", "PERFECT"][G.stars];
+  const imgs = [...document.querySelectorAll("#winStars img")];
+  imgs.forEach((im, i) => { im.className = ""; im.classList.toggle("off", i >= G.stars); });
+  w.classList.add("on");
+  imgs.forEach((im, i) => setTimeout(() => { im.classList.add("show"); if (i < G.stars) sfx("star", .6); }, 500 + i * 300));
+  startConfetti();
+}
+
+// ======================================================================
+//  Input
+// ======================================================================
+function evToBoard(e) {
+  const r = cv.getBoundingClientRect();
+  const x = (e.clientX - r.left) * DPR, y = (e.clientY - r.top) * DPR;
+  return { x, y, col: (x - BR.x) / BR.cs, row: (y - BR.y) / BR.cs };
+}
+function knifeHit(pt) {
+  for (let i = G.knives.length - 1; i >= 0; i--) {
+    const k = G.knives[i];
+    const ax = k.x, ay = k.y, bx = k.dir === "h" ? k.x + k.len : k.x, by = k.dir === "h" ? k.y : k.y + k.len;
+    // distance from point to segment, in cells; handles stick out 0.25 cell
+    const t = Math.max(-0.3 / k.len, Math.min(1 + 0.3 / k.len, ((pt.col - ax) * (bx - ax) + (pt.row - ay) * (by - ay)) / (k.len * k.len)));
+    const qx = ax + t * (bx - ax), qy = ay + t * (by - ay);
+    if (Math.hypot(pt.col - qx, pt.row - qy) < 0.38) return k;
+  }
+  return null;
+}
+
+cv.addEventListener("pointerdown", (e) => {
+  if (!G || G.won || G.drag) return;
+  cv.setPointerCapture(e.pointerId);
+  const pt = evToBoard(e);
+  const col = Math.floor(pt.col), row = Math.floor(pt.row);
+  const k = knifeHit(pt);
+  if (k) {
+    G.drag = { type: "knife", obj: k, sx: pt.col, sy: pt.row, ox: k.x, oy: k.y, t0: performance.now(), moved: false, before: snapshot() };
+    sfx("hold-cut", .6);
+    return;
+  }
+  const hp = pieceAt(col, row);
+  if (hp) {
+    const p = hp.p;
+    G.pieces.splice(G.pieces.indexOf(p), 1); G.pieces.push(p);     // bring to front
+    G.drag = { type: "piece", obj: p, sx: pt.col, sy: pt.row, ox: p.x, oy: p.y, fx: p.x, fy: p.y, before: snapshot() };
+    sfx("pick", .7);
+    return;
+  }
+  const ht = trayAt(col, row);
+  if (ht) {
+    const t = ht.t;
+    const carried = G.pieces.filter(p => pieceInTray(p, t));
+    G.drag = { type: "tray", obj: t, carried, sx: pt.col, sy: pt.row, ox: t.x, oy: t.y, fx: t.x, fy: t.y,
+      pOrig: carried.map(p => [p.x, p.y]), before: snapshot() };
+    sfx("pick", .7);
+  }
+});
+
+cv.addEventListener("pointermove", (e) => {
+  const d = G && G.drag; if (!d) return;
+  const pt = evToBoard(e);
+  const dx = pt.col - d.sx, dy = pt.row - d.sy;
+  if (Math.hypot(dx, dy) > 0.15) d.moved = true;
+  if (d.type === "knife") {
+    const k = d.obj;
+    const maxX = k.dir === "h" ? G.cols - k.len : G.cols, maxY = k.dir === "h" ? G.rows : G.rows - k.len;
+    d.fx = Math.max(0, Math.min(maxX, d.ox + dx)); d.fy = Math.max(0, Math.min(maxY, d.oy + dy));
+    const nx = Math.round(d.fx), ny = Math.round(d.fy);
+    if (nx !== k.x || ny !== k.y) { k.x = nx; k.y = ny; }
+  } else {
+    d.fx = d.ox + dx; d.fy = d.oy + dy - (e.pointerType === "touch" ? 0.4 : 0);   // lift above finger
+  }
+});
+
+function endDrag() {
+  const d = G && G.drag; if (!d) return;
+  G.drag = null;
+  if (d.type === "knife") {
+    const k = d.obj;
+    if (!d.moved && performance.now() - d.t0 < 350 && k.canRot) rotateKnife(k);
+    if (snapshotChanged(d.before)) G.history.push(d.before);
+    sfx("drop-cut", .6);
+  } else if (d.type === "piece" && !d.moved && G.L.mode === "daily") {
+    rotatePiece(d.obj, d.before);
+  } else if (d.type === "piece") {
+    const p = d.obj, nx = Math.round(d.fx), ny = Math.round(d.fy);
+    if ((nx !== d.ox || ny !== d.oy) && canPlacePiece(p, nx, ny)) {
+      G.history.push(d.before);
+      p.x = nx; p.y = ny; p.pop = 1; p.anchor = null;
+      sfx("drop");
+    } else {
+      p.back = { fx: d.fx, fy: d.fy, t: 0 };
+    }
+  } else if (d.type === "tray") {
+    const t = d.obj, nx = Math.round(d.fx), ny = Math.round(d.fy);
+    if ((nx !== d.ox || ny !== d.oy) && canPlaceTray(t, nx, ny, d.carried)) {
+      G.history.push(d.before);
+      const ddx = nx - t.x, ddy = ny - t.y;
+      t.x = nx; t.y = ny;
+      d.carried.forEach(p => { p.x += ddx; p.y += ddy; p.anchor = null; });
+      sfx("drop");
+    }
+  }
+  updateHud();
+  checkWin();
+}
+function snapshotChanged(s) { return s !== snapshot(); }
+cv.addEventListener("pointerup", endDrag);
+cv.addEventListener("pointercancel", endDrag);
+
+// Daily mode (DragBlockDaily.TapRotate): tap a rice piece to turn it 90° counter-clockwise,
+// trying small "kick" offsets when the rotated shape would not fit in place.
+const KICKS = [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]];
+function bboxCenter(cells) {
+  const xs = cells.map(c => c.dx), ys = cells.map(c => c.dy);
+  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+}
+function rotatePiece(p, before) {
+  // Turn around a fixed anchor (centre of the bounding box when the player started
+  // rotating). Pieces with an odd x even box can't keep their centre exactly, so each
+  // step snaps to the cell nearest the anchor; four taps bring the piece back home.
+  const [ocx, ocy] = bboxCenter(p.cells);
+  if (!p.anchor) p.anchor = [p.x + ocx, p.y + ocy];
+  const turned = p.cells.map(c => ({ ...c, dx: c.dy, dy: -c.dx }));
+  const [ncx, ncy] = bboxCenter(turned);
+  const sx = Math.floor(p.anchor[0] - p.x - ncx + 0.5), sy = Math.floor(p.anchor[1] - p.y - ncy + 0.5);
+  const rotated = { ...p, cells: turned.map(c => ({ ...c, dx: c.dx + sx, dy: c.dy + sy })), cuts: new Set() };
+  for (const [kx, ky] of KICKS) {
+    if (!canPlacePiece(rotated, p.x + kx, p.y + ky, p)) continue;
+    G.history.push(before);
+    p.cells = rotated.cells; p.cuts = rotated.cuts; p.x += kx; p.y += ky;
+    if (kx || ky) { const [cx, cy] = bboxCenter(p.cells); p.anchor = [p.x + cx, p.y + cy]; }
+    p.spin = 1; p.turn = 1;
+    sfx("drop", .6);
+    updateHud(); checkWin();
+    return;
+  }
+  p.back = { fx: p.x + 0.15, fy: p.y, t: 0 };   // no room: small shake
+}
+
+function rotateKnife(k) {
+  const cx = k.dir === "h" ? k.x + k.len / 2 : k.x, cy = k.dir === "h" ? k.y : k.y + k.len / 2;
+  if (k.dir === "h") { k.dir = "v"; k.x = Math.round(cx); k.y = Math.round(cy - k.len / 2); }
+  else { k.dir = "h"; k.x = Math.round(cx - k.len / 2); k.y = Math.round(cy); }
+  k.x = Math.max(0, Math.min(k.dir === "h" ? G.cols - k.len : G.cols, k.x));
+  k.y = Math.max(0, Math.min(k.dir === "h" ? G.rows : G.rows - k.len, k.y));
+  k.spin = 1;
+  sfx("button");
+}
+
+// ======================================================================
+//  Rendering
+// ======================================================================
+let ricePattern = null;
+function getRicePattern() {
+  if (!ricePattern && riceImg.complete && riceImg.naturalWidth) ricePattern = ctx.createPattern(riceImg, "repeat");
+  if (ricePattern) ricePattern.setTransform(new DOMMatrix().translate(BR.x, BR.y).scale(BR.cs / riceImg.naturalWidth));
+  return ricePattern;
+}
+
+function drawBoard() {
+  const w = BR.cs * G.cols, h = BR.cs * G.rows, pad = BR.cs * 0.28;
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,.22)";
+  roundRect(BR.x - pad + 6 * DPR, BR.y - pad + 8 * DPR, w + pad * 2, h + pad * 2, BR.cs * 0.35); ctx.fill();
+  if (boardImg.complete && boardImg.naturalWidth) {
+    ctx.save(); roundRect(BR.x - pad, BR.y - pad, w + pad * 2, h + pad * 2, BR.cs * 0.35); ctx.clip();
+    ctx.drawImage(boardImg, BR.x - pad, BR.y - pad, w + pad * 2, h + pad * 2); ctx.restore();
+  } else { ctx.fillStyle = "#d49468"; roundRect(BR.x - pad, BR.y - pad, w + pad * 2, h + pad * 2, BR.cs * 0.35); ctx.fill(); }
+  ctx.strokeStyle = "rgba(120,60,30,.18)"; ctx.lineWidth = 1.5 * DPR;
+  ctx.beginPath();
+  for (let c = 0; c <= G.cols; c++) { ctx.moveTo(px(c), py(0)); ctx.lineTo(px(c), py(G.rows)); }
+  for (let r = 0; r <= G.rows; r++) { ctx.moveTo(px(0), py(r)); ctx.lineTo(px(G.cols), py(r)); }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
+}
+
+function drawTray(t, ox, oy) {
+  const cs = BR.cs, e = cs * 0.09;
+  ctx.save();
+  // dark frame (union of expanded cells) + drop shadow
+  ctx.fillStyle = "rgba(0,0,0,.25)";
+  for (const c of t.cells) ctx.fillRect(px(ox + c.dx) - e + 4 * DPR, py(oy + c.dy) - e + 6 * DPR, cs + e * 2, cs + e * 2);
+  ctx.fillStyle = "#3e2420";
+  for (const c of t.cells) ctx.fillRect(px(ox + c.dx) - e, py(oy + c.dy) - e, cs + e * 2, cs + e * 2);
+  for (const c of t.cells) {
+    const x = px(ox + c.dx), y = py(oy + c.dy);
+    ctx.fillStyle = G.L.mode === "daily" ? "#e9c07a" : "#f2434f";
+    ctx.fillRect(x, y, cs, cs);
+    ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 2 * DPR;
+    ctx.strokeRect(x + 2 * DPR, y + 2 * DPR, cs - 4 * DPR, cs - 4 * DPR);
+    if (c.t) drawTopping(c.t, "in_tray", x, y, c.r, 0.85);
+  }
+  ctx.restore();
+}
+
+// Draw one cell's topping exactly like the game: sprite placed by its pivot / pixel size
+// (TOPPING_META, in cells) around the cell centre, rotated, then masked to the cell.
+function drawTopping(name, kind, x, y, rotDeg, alpha = 1, inset = 0) {
+  const im = toppingImg(name, kind), m = (TOPPING_META[name] || {})[kind];
+  if (!im.complete || !im.naturalWidth) return;
+  const cs = BR.cs;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x + inset, y + inset, cs - inset * 2, cs - inset * 2); ctx.clip();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(x + cs / 2, y + cs / 2);
+  ctx.rotate(-(rotDeg || 0) * Math.PI / 180);
+  if (m) {
+    const [w, h, pvx, pvy, ox, oy] = m;
+    ctx.drawImage(im, (ox - pvx * w) * cs, (-oy - (1 - pvy) * h) * cs, w * cs, h * cs);
+  } else {
+    const s = cs / Math.max(im.naturalWidth, im.naturalHeight);
+    ctx.drawImage(im, -im.naturalWidth * s / 2, -im.naturalHeight * s / 2, im.naturalWidth * s, im.naturalHeight * s);
+  }
+  ctx.restore();
+}
+
+function drawImgRot(im, cx, cy, size, rotDeg, alpha = 1) {
+  if (!im.complete || !im.naturalWidth) return;
+  const s = size / Math.max(im.naturalWidth, im.naturalHeight);
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(cx, cy); ctx.rotate(-(rotDeg || 0) * Math.PI / 180);
+  ctx.drawImage(im, -im.naturalWidth * s / 2, -im.naturalHeight * s / 2, im.naturalWidth * s, im.naturalHeight * s);
+  ctx.restore();
+}
+
+function cellShape(p, c, x, y, inset) {
+  // rect for a rice cell: flush on connected sides, inset (rounded) on open sides
+  const cs = BR.cs, seam = 1.5 * DPR;
+  const sides = {};
+  for (const s of ["L", "R", "U", "D"]) {
+    const n = { R: [1, 0], L: [-1, 0], D: [0, 1], U: [0, -1] }[s];
+    sides[s] = connected(p, c, s) ? 0 : hasCell(p, c.dx + n[0], c.dy + n[1]) ? seam : inset;
+  }
+  const rad = cs * 0.2;
+  const r = [
+    sides.L === inset && sides.U === inset ? rad : 0, sides.R === inset && sides.U === inset ? rad : 0,
+    sides.R === inset && sides.D === inset ? rad : 0, sides.L === inset && sides.D === inset ? rad : 0,
+  ];
+  ctx.beginPath();
+  const rx = x + sides.L, ry = y + sides.U, rw = cs - sides.L - sides.R, rh = cs - sides.U - sides.D;
+  if (ctx.roundRect) ctx.roundRect(rx, ry, rw, rh, r); else ctx.rect(rx, ry, rw, rh);
+}
+
+function drawPiece(p, fx, fy, lifted) {
+  const cs = BR.cs;
+  const pat = getRicePattern();
+  const scale = lifted ? 1.04 : 1 + (p.pop || 0) * 0.08;
+  // centre of piece for scale animation
+  let mx = 0, my = 0; p.cells.forEach(c => { mx += c.dx + .5; my += c.dy + .5; }); mx /= p.cells.length; my /= p.cells.length;
+  const cx = px(fx + mx), cy = py(fy + my);
+  ctx.save();
+  ctx.translate(cx, cy); ctx.scale(scale, scale);
+  if (p.turn) ctx.rotate(p.turn * Math.PI / 2);   // ease in from the previous orientation
+  ctx.translate(-cx, -cy);
+  // shadow
+  ctx.fillStyle = lifted ? "rgba(0,0,0,.28)" : "rgba(60,25,10,.28)";
+  const sh = (lifted ? 10 : 4) * DPR;
+  for (const c of p.cells) { cellShape(p, c, px(fx + c.dx) + sh * .4, py(fy + c.dy) + sh, cs * 0.05); ctx.fill(); }
+  // white rim
+  ctx.fillStyle = "#fffdf5";
+  for (const c of p.cells) { cellShape(p, c, px(fx + c.dx), py(fy + c.dy), cs * 0.05); ctx.fill(); }
+  // rice texture
+  ctx.fillStyle = pat || "#f3efe3";
+  for (const c of p.cells) { cellShape(p, c, px(fx + c.dx), py(fy + c.dy), cs * 0.1); ctx.fill(); }
+  // toppings + wrong marks
+  for (const c of p.cells) {
+    const x = px(fx + c.dx), y = py(fy + c.dy);
+    if (c.t) drawTopping(c.t, "in_rice", x, y, c.r, 1, cs * 0.06);
+    if (!lifted && G.drag?.obj !== p) {
+      const h = trayAt(fx + c.dx, fy + c.dy);
+      if (h && (h.c.t || null) !== (c.t || null)) drawImgRot(xImg, x + cs / 2, y + cs / 2, cs * 0.6, 0, 0.9);
+    }
+  }
+  ctx.restore();
+}
+
+function drawKnife(k, active) {
+  const cs = BR.cs;
+  const ax = px(k.x), ay = py(k.y);
+  const bx = k.dir === "h" ? px(k.x + k.len) : ax, by = k.dir === "h" ? ay : py(k.y + k.len);
+  const ux = (bx - ax) / (k.len * cs), uy = (by - ay) / (k.len * cs);
+  const ext = cs * 0.22;
+  const sx = ax - ux * ext, sy = ay - uy * ext, ex = bx + ux * ext, ey = by + uy * ext;
+  ctx.save();
+  ctx.lineCap = "round";
+  if (active) { ctx.strokeStyle = "rgba(255,230,90,.9)"; ctx.lineWidth = cs * 0.26; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); }
+  ctx.strokeStyle = "#2b3352"; ctx.lineWidth = cs * 0.17; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  ctx.strokeStyle = "#6f8fe6"; ctx.lineWidth = cs * 0.1; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke();
+  // dashes
+  ctx.strokeStyle = active ? "#fff6b0" : "#2b3352"; ctx.lineWidth = cs * 0.035; ctx.setLineDash([cs * 0.16, cs * 0.12]);
+  ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
+  // end knobs
+  for (const [x, y] of [[sx, sy], [ex, ey]]) {
+    ctx.fillStyle = "#2b3352"; ctx.beginPath(); ctx.arc(x, y, cs * 0.12, 0, 7); ctx.fill();
+    ctx.fillStyle = "#8fa8f0"; ctx.beginPath(); ctx.arc(x, y, cs * 0.075, 0, 7); ctx.fill();
+  }
+  if (k.canRot && rotImg.complete) {
+    const mx = (ax + bx) / 2 + (k.dir === "h" ? 0 : cs * 0.42), my = (ay + by) / 2 - (k.dir === "h" ? cs * 0.42 : 0);
+    ctx.save(); ctx.translate(mx, my); ctx.rotate((k.spin || 0) * Math.PI);
+    const s = cs * 0.38; ctx.drawImage(rotImg, -s / 2, -s / 2, s, s * rotImg.naturalHeight / rotImg.naturalWidth); ctx.restore();
+  }
+  ctx.restore();
+}
+
+function drawRotateBadge(p, fx, fy, dt) {
+  if (p.spin) p.spin = Math.max(0, p.spin - dt * 4);
+  // badge on the top-most, then left-most cell of the piece
+  const c = p.cells.reduce((a, b) => (b.dy < a.dy || (b.dy === a.dy && b.dx < a.dx)) ? b : a);
+  const s = BR.cs * 0.34, cx = px(fx + c.dx) + s * 0.75, cy = py(fy + c.dy) + s * 0.75;
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(-(p.spin || 0) * Math.PI / 2); ctx.globalAlpha = 0.9;
+  ctx.drawImage(rotImg, -s / 2, -s / 2, s, s * rotImg.naturalHeight / rotImg.naturalWidth);
+  ctx.restore();
+}
+
+function drawGhost(p, x, y, ok) {
+  ctx.save();
+  ctx.setLineDash([6 * DPR, 5 * DPR]); ctx.lineWidth = 2 * DPR;
+  ctx.strokeStyle = ok ? "rgba(255,255,255,.85)" : "rgba(255,80,80,.7)";
+  for (const c of p.cells) {
+    const L = !hasCell(p, c.dx - 1, c.dy), R = !hasCell(p, c.dx + 1, c.dy), U = !hasCell(p, c.dx, c.dy - 1), D = !hasCell(p, c.dx, c.dy + 1);
+    const x0 = px(x + c.dx), y0 = py(y + c.dy), cs = BR.cs;
+    ctx.beginPath();
+    if (U) { ctx.moveTo(x0, y0); ctx.lineTo(x0 + cs, y0); }
+    if (D) { ctx.moveTo(x0, y0 + cs); ctx.lineTo(x0 + cs, y0 + cs); }
+    if (L) { ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + cs); }
+    if (R) { ctx.moveTo(x0 + cs, y0); ctx.lineTo(x0 + cs, y0 + cs); }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  requestAnimationFrame(frame);
+  if (!G || !document.getElementById("game").classList.contains("on")) return;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  drawBoard();
+  const d = G.drag;
+
+  // trays (dragged tray follows the finger)
+  for (const t of G.trays) {
+    if (d && d.type === "tray" && d.obj === t) continue;
+    drawTray(t, t.x, t.y);
+  }
+  if (d && d.type === "tray") drawTray(d.obj, d.fx, d.fy);
+
+  // pieces
+  for (const p of G.pieces) {
+    if (d && d.obj === p) continue;
+    let fx = p.x, fy = p.y;
+    if (d && d.type === "tray" && d.carried.includes(p)) { fx += d.fx - d.ox; fy += d.fy - d.oy; }
+    if (p.back) {
+      p.back.t += dt * 6;
+      const k = Math.min(1, p.back.t), e = 1 - Math.pow(1 - k, 3);
+      fx = p.back.fx + (p.x - p.back.fx) * e; fy = p.back.fy + (p.y - p.back.fy) * e;
+      if (k >= 1) p.back = null;
+    }
+    if (p.pop) p.pop = Math.max(0, p.pop - dt * 5);
+    if (p.turn) p.turn = Math.max(0, p.turn - dt / 0.15) ;
+    drawPiece(p, fx, fy, false);
+    if (G.L.mode === "daily" && rotImg.complete) drawRotateBadge(p, fx, fy, dt);
+  }
+  if (d && d.type === "piece") {
+    const nx = Math.round(d.fx), ny = Math.round(d.fy);
+    drawGhost(d.obj, nx, ny, canPlacePiece(d.obj, nx, ny));
+    drawPiece(d.obj, d.fx, d.fy, true);
+  }
+
+  // knives
+  for (const k of G.knives) {
+    if (k.spin) k.spin = Math.max(0, k.spin - dt * 4);
+    drawKnife(k, knifeEdges(k).length > 0);
+  }
+
+  // slash effects
+  G.slashes = G.slashes.filter(s => (s.t += dt * 3) < 1);
+  for (const s of G.slashes) {
+    const k = s.k, cs = BR.cs;
+    const ax = px(k.x), ay = py(k.y), bx = k.dir === "h" ? px(k.x + k.len) : ax, by = k.dir === "h" ? ay : py(k.y + k.len);
+    ctx.save(); ctx.globalAlpha = 1 - s.t; ctx.strokeStyle = "#fff"; ctx.lineWidth = cs * 0.12 * (1 - s.t) + 2;
+    ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + (bx - ax) * Math.min(1, s.t * 3), ay + (by - ay) * Math.min(1, s.t * 3)); ctx.stroke(); ctx.restore();
+  }
+
+  // particles (rice grains / sparkles)
+  G.fx = G.fx.filter(f => (f.life -= dt * 1.4) > 0);
+  for (const f of G.fx) {
+    f.x += f.vx; f.y += f.vy; f.vy += f.gold ? -0.0005 : 0.004;
+    ctx.save(); ctx.globalAlpha = Math.min(1, f.life);
+    ctx.fillStyle = f.gold ? "#ffd84a" : "#fffaf0";
+    ctx.translate(px(f.x), py(f.y)); ctx.rotate(f.x * 5);
+    const s = BR.cs * (f.gold ? 0.07 : 0.05);
+    ctx.fillRect(-s, -s / 2, s * 2, s); ctx.restore();
+  }
+
+  // tutorial hand
+  if (G.L.tut && !G.history.length && !d) drawTutorialHand(dt);
+}
+
+function drawTutorialHand(dt) {
+  G.tutT = (G.tutT + dt * 0.5) % 1;
+  let from, to;
+  if (G.L.tut === "cut" && G.knives[0]) {
+    const k = G.knives[0], p = G.pieces[0];
+    if (knifeEdges(k).length) return;   // knife already on the rice: highlight Cut button instead
+    const target = p.cells.find(c => hasCell(p, c.dx, c.dy + 1)) || p.cells[0];
+    from = [k.x + (k.dir === "h" ? k.len / 2 : 0), k.y + (k.dir === "h" ? 0 : k.len / 2)];
+    to = [p.x + target.dx + .5, p.y + target.dy + 1];
+  } else {
+    const p = G.pieces[0], t = G.trays[0];
+    if (!p || !t || pieceInTray(p, t)) return;
+    from = [p.x + p.cells[0].dx + .5, p.y + p.cells[0].dy + .5];
+    to = [t.x + t.cells[0].dx + .5, t.y + t.cells[0].dy + .5];
+  }
+  const e = G.tutT < .2 ? 0 : G.tutT > .8 ? 1 : (G.tutT - .2) / .6;
+  const x = px(from[0] + (to[0] - from[0]) * e), y = py(from[1] + (to[1] - from[1]) * e);
+  if (handImg.complete) { const s = BR.cs * 1.1; ctx.globalAlpha = .9; ctx.drawImage(handImg, x - s * .25, y - s * .1, s, s); ctx.globalAlpha = 1; }
+}
+
+// ======================================================================
+//  HUD / UI
+// ======================================================================
+function updateHud() {
+  const L = G.L;
+  document.getElementById("lvName").textContent = L.mode === "daily" ? `Daily ${L.lv}` : `Lv.${L.ch}-${L.lv}`;
+  document.getElementById("knifeCount").textContent = "x" + Math.max(0, L.cuts - G.cutsUsed);
+  document.getElementById("lvFrame").classList.toggle("noknife", !L.knives.length);
+  document.querySelectorAll("#starRow img").forEach((im, i) => im.classList.toggle("lost", i >= G.stars));
+  document.getElementById("btnCut").classList.toggle("on", canCut());
+  document.getElementById("btnCut").style.visibility = L.knives.length ? "visible" : "hidden";
+  document.getElementById("btnHint").style.visibility = L.hints.length ? "visible" : "hidden";
+  if (G.history.length) document.getElementById("tut").style.display = "none";
+}
+setInterval(() => { if (G && !G.drag) document.getElementById("btnCut").classList.toggle("on", canCut()); }, 150);
+
+document.getElementById("btnCut").onclick = doCut;
+document.getElementById("btnUndo").onclick = undo;
+document.getElementById("btnHome").onclick = () => { sfx("button"); buildMenu(); showScreen("menu"); };
+document.getElementById("btnReplay").onclick = () => { stopConfetti(); loadLevel(levelIndex); };
+document.getElementById("btnNext").onclick = () => { stopConfetti(); loadLevel((levelIndex + 1) % LEVELS.length); };
+
+// hint popup
+let hintPage = 0;
+function showHint() {
+  const h = G.L.hints; if (!h.length) return;
+  document.getElementById("hintImg").src = "assets/hints/" + h[hintPage];
+  document.getElementById("hintPage").textContent = `${hintPage + 1}/${h.length}`;
+}
+document.getElementById("btnHint").onclick = () => { hintPage = 0; showHint(); document.getElementById("hint").classList.add("on"); sfx("button"); };
+document.getElementById("hintPrev").onclick = () => { hintPage = Math.max(0, hintPage - 1); showHint(); };
+document.getElementById("hintNext").onclick = () => { hintPage = Math.min(G.L.hints.length - 1, hintPage + 1); showHint(); };
+document.getElementById("hintClose").onclick = () => document.getElementById("hint").classList.remove("on");
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.toggle("on", s.id === id));
+  if (id === "game") layout();
+}
+
+// level select
+let tab = "C1";
+function buildMenu() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  for (const t of ["C1", "C2", "C3", "C4", "Daily"]) {
+    const b = document.createElement("button");
+    b.textContent = t === "Daily" ? "Daily" : "Chapter " + t[1];
+    b.className = t === tab ? "on" : "";
+    b.onclick = () => { tab = t; buildMenu(); };
+    tabs.appendChild(b);
+  }
+  const grid = document.getElementById("grid");
+  grid.innerHTML = "";
+  LEVELS.forEach((L, i) => {
+    const inTab = tab === "Daily" ? L.mode === "daily" : L.mode === "story" && "C" + L.ch === tab;
+    if (!inTab) return;
+    const b = document.createElement("button");
+    const st = save[levelKey(L)] || 0;
+    b.className = "lvbtn" + (st ? " done" : "");
+    const tags = [];
+    if (L.knives.length) tags.push("✂" + L.cuts);
+    if (L.knives.some(k => k.rot)) tags.push("↻");
+    if (L.trays.some(t => t.c.some(c => c[2]))) tags.push("🍣");
+    b.innerHTML = `<small>${"★".repeat(st)}</small>${L.lv}<span class="tags">${tags.join(" ")}</span>`;
+    b.onclick = () => { sfx("button"); loadLevel(i); };
+    grid.appendChild(b);
+  });
+}
+document.getElementById("music").onchange = (e) => { if (e.target.checked) bgm.play().catch(() => {}); else bgm.pause(); };
+
+// confetti
+let confettiRaf = 0;
+function startConfetti() {
+  const c = document.getElementById("confetti"), x = c.getContext("2d");
+  c.width = c.clientWidth; c.height = c.clientHeight;
+  const cols = ["#ff5a6e", "#ffd84a", "#6fd0ff", "#8fe36a", "#c38bff"];
+  const parts = Array.from({ length: 120 }, () => ({ x: Math.random() * c.width, y: -Math.random() * c.height,
+    vy: 2 + Math.random() * 3, vx: (Math.random() - .5) * 2, r: Math.random() * 6, col: cols[Math.random() * 5 | 0] }));
+  const step = () => {
+    x.clearRect(0, 0, c.width, c.height);
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.r += 0.1; if (p.y > c.height) p.y = -10;
+      x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.col; x.fillRect(-4, -2, 8, 4); x.restore();
+    }
+    confettiRaf = requestAnimationFrame(step);
+  };
+  cancelAnimationFrame(confettiRaf); step();
+}
+function stopConfetti() { cancelAnimationFrame(confettiRaf); }
+
+layout();
+buildMenu();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
