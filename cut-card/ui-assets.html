@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thẻ Cắt · Màn chơi với asset thật</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #7A6252; --cream: #FFF6E6; --wood-ink: #96623C; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: #2c211d; font-family: Nunito, "Segoe UI", system-ui, sans-serif; }
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 10px 20px; color: #f6eadb; }
+  .wrap h1 { margin: 0; font-size: 1rem; font-weight: 900; text-align: center; }
+  .wrap h1 small { display: block; color: #c7b3a3; font-weight: 700; font-size: .78rem; }
+  .bar { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .bar label { font-size: .8rem; font-weight: 800; background: #3a2c26; border: 2px solid #5a4338; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .frame { width: min(390px, 100%, calc((100vh - 120px) * 390 / 844)); aspect-ratio: 390 / 844; border-radius: 34px; overflow: hidden;
+    box-shadow: 0 0 0 8px #120d0b, 0 18px 40px rgba(0,0,0,.5); position: relative; }
+  .stage { position: absolute; left: 0; top: 0; width: 390px; height: 844px; transform-origin: 0 0; background: #F3E9DA; overflow: hidden; }
+  .stage * { position: absolute; }
+  .stage img { display: block; user-select: none; -webkit-user-drag: none; }
+  .t { color: var(--cream); font-weight: 900; white-space: nowrap; transform: translate(-50%, -50%);
+       -webkit-text-stroke: 4px var(--wood-ink); paint-order: stroke fill; }
+  .lbl { color: var(--ink); font-weight: 800; font-size: 11px; transform: translate(-50%, -50%); white-space: nowrap; }
+  /* 9-slice bằng border-image, số slice lấy từ slicing.json (px ảnh), bề rộng viền = slice × 0.5 */
+  .board { border-style: solid; border-width: 30px 30px 32px 30px; border-image: url(assets/board.png) 60 60 64 60 fill / 30px 30px 32px 30px; }
+  .card  { width: 84px; height: 104px; border-style: solid; border-width: 22px 22px 24px 22px; }
+  .card.line { border-image: url(assets/card_line.png) 44 44 48 44 fill / 22px 22px 24px 22px; }
+  .card.mold { border-image: url(assets/card_mold.png) 44 44 48 44 fill / 22px 22px 24px 22px; }
+  .card.fn   { border-image: url(assets/card_fn.png)   44 44 48 44 fill / 22px 22px 24px 22px; }
+  .well { border-style: solid; border-width: 9px 7px 7px 7px; border-image: url(assets/tin_well.png) 40 32 32 32 fill / 9px 7px 7px 7px; }
+  .grid { display: none; }
+  body.showgrid .grid { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Màn chơi dựng bằng asset thật<small>Ảnh lấy từ Assets/_Project/Source/Art · khay, ngăn, quai vẽ đúng cách sẽ làm trong Unity</small></h1>
+  <div class="bar"><label><input type="checkbox" id="g"> Hiện khung ô (để soát khít lưới)</label></div>
+  <div class="frame" id="frame"><div class="stage" id="stage"></div></div>
+</div>
+<script>
+/* ======================= Thông số bố cục (px, khung 390×844) ======================= */
+const C = 40, O = 12, BX = 43, BY = 150;
+const BW = 7 * C + 2 * O, BH = 10 * C + 2 * O;
+const cx = x => BX + O + x * C, cy = y => BY + O + y * C;
+const TIN = { well: '#B3A396', wall: '#DACEC3', rim: '#E5D8CD', rim_shadow: '#C4B8AC', outline: '#968C84' };
+const RIM = 9, RAD = 12;                 // bề dày vành khay, bán kính bo góc ngoài
+const LEVEL = {
+  tray: [[2,1],[3,1],[1,2],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3]],
+  fixed: [{ img: 'food_sausage', cells: [[2,3],[3,3]] }],            // món cố định: ngăn khay gộp các ô của món
+  rice: { full: [[2,1],[1,7],[2,7],[3,7],[4,7],[1,8],[2,8],[3,8]], half: [[3,1,0],[4,8,180]] },   // half: [x, y, góc xoay]
+};
+const stage = document.getElementById('stage');
+const add = (html) => { stage.insertAdjacentHTML('beforeend', html); return stage.lastElementChild; };
+const img = (src, x, y, w, h, extra = '') => add(`<img src="assets/${src}.png" style="left:${x}px;top:${y}px;width:${w}px;${h ? `height:${h}px;` : ''}${extra}">`);
+
+/* ======================= Đầu màn hình: kệ gỗ ======================= */
+add(`<div style="left:0;top:0;width:390px;height:132px;background:#E8D8C4"></div>`);
+img('mascot_egg', 296, 58, 84);
+img('shelf', -6, 112, 402);
+img('plaque_tab', 110, 21, 170);
+add(`<div class="t" style="left:195px;top:60px;font-size:17px;-webkit-text-stroke-width:3px">Level 9</div>`);
+add(`<div class="t" style="left:195px;top:90px;font-size:22px">×3</div>`);
+img('btn_settings', 16, 26, 52);
+img('btn_noads', 22, 82, 42);
+
+/* ======================= Thớt + khung ô ======================= */
+add(`<div class="board" style="left:${BX}px;top:${BY}px;width:${BW}px;height:${BH}px"></div>`);
+let gl = '';
+for (let i = 1; i < 7; i++) gl += `<line x1="${cx(i)}" y1="${cy(0)}" x2="${cx(i)}" y2="${cy(10)}"/>`;
+for (let j = 1; j < 10; j++) gl += `<line x1="${cx(0)}" y1="${cy(j)}" x2="${cx(7)}" y2="${cy(j)}"/>`;
+add(`<svg width="390" height="844" style="left:0;top:0" stroke="#DEC8A8" stroke-width="1">${gl}</svg>`);
+
+/* ======================= Khay hộp sắt ======================= */
+function trayShapes(e, r) {
+  // mỗi ô nở thêm e px, bo góc r; thêm dải nối giữa hai ô cạnh nhau để lấp khe, khối 2×2 lấp tâm
+  const s = new Set(LEVEL.tray.map(c => c.join(','))), has = (x, y) => s.has(`${x},${y}`);
+  let out = '';
+  LEVEL.tray.forEach(([x, y]) => {
+    out += `<rect x="${cx(x) - e}" y="${cy(y) - e}" width="${C + 2 * e}" height="${C + 2 * e}" rx="${r}"/>`;
+    if (has(x + 1, y)) out += `<rect x="${cx(x) + C / 2}" y="${cy(y) - e}" width="${C}" height="${C + 2 * e}"/>`;
+    if (has(x, y + 1)) out += `<rect x="${cx(x) - e}" y="${cy(y) + C / 2}" width="${C + 2 * e}" height="${C}"/>`;
+    if (has(x + 1, y) && has(x, y + 1) && has(x + 1, y + 1)) out += `<rect x="${cx(x) + C / 2}" y="${cy(y) + C / 2}" width="${C}" height="${C}"/>`;
+  });
+  return out;
+}
+add(`<svg width="390" height="844" style="left:0;top:0">
+  <defs><filter id="sh" x="-20%" y="-20%" width="140%" height="160%"><feGaussianBlur stdDeviation="3"/></filter></defs>
+  <g fill="#5A4637" opacity=".22" transform="translate(0 5)" filter="url(#sh)">${trayShapes(RIM + 2, RAD + 2)}</g>
+  <g fill="${TIN.outline}">${trayShapes(RIM + 2, RAD + 2)}</g>
+  <g fill="${TIN.rim_shadow}">${trayShapes(RIM, RAD)}</g>
+  <g fill="${TIN.rim}" transform="translate(0 -2)">${trayShapes(RIM - 1, RAD - 1)}</g>
+  <g fill="${TIN.wall}">${LEVEL.tray.map(([x, y]) => `<rect x="${cx(x)}" y="${cy(y)}" width="${C}" height="${C}"/>`).join('')}</g>
+</svg>`);
+// ngăn: mỗi ô một ngăn, trừ ô có món cố định -> một ngăn gộp theo khung bao của món
+const fixedCells = new Set(LEVEL.fixed.flatMap(f => f.cells.map(c => c.join(','))));
+const compartments = [
+  ...LEVEL.tray.filter(c => !fixedCells.has(c.join(','))).map(c => [c]),
+  ...LEVEL.fixed.map(f => f.cells),
+];
+const INSET = 4;
+compartments.forEach(cells => {
+  const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]);
+  const x0 = cx(Math.min(...xs)) + INSET, y0 = cy(Math.min(...ys)) + INSET;
+  const w = (Math.max(...xs) - Math.min(...xs) + 1) * C - 2 * INSET, h = (Math.max(...ys) - Math.min(...ys) + 1) * C - 2 * INSET;
+  add(`<div class="well" style="left:${x0}px;top:${y0}px;width:${w}px;height:${h}px"></div>`);
+});
+// món cố định nằm gọn trong ngăn gộp
+LEVEL.fixed.forEach(f => {
+  const xs = f.cells.map(c => c[0]), ys = f.cells.map(c => c[1]);
+  const bx = cx(Math.min(...xs)) + INSET + 4, by = cy(Math.min(...ys)) + INSET + 4;
+  const bw = (Math.max(...xs) - Math.min(...xs) + 1) * C - 2 * INSET - 8, bh = (Math.max(...ys) - Math.min(...ys) + 1) * C - 2 * INSET - 8;
+  const ar = 304 / 156, w = Math.min(bw, bh * ar), h = w / ar;
+  img(f.img, bx + (bw - w) / 2, by + (bh - h) / 2 + 1, w, h);
+});
+// quai: nằm ngoài vành, chỉ chạm mép viền ngoài
+{
+  const xs = LEVEL.tray.map(c => c[0]), minx = Math.min(...xs), maxx = Math.max(...xs);
+  const rowsL = LEVEL.tray.filter(c => c[0] === minx).map(c => c[1]), rowsR = LEVEL.tray.filter(c => c[0] === maxx).map(c => c[1]);
+  const midL = cy((Math.min(...rowsL) + Math.max(...rowsL) + 1) / 2), midR = cy((Math.min(...rowsR) + Math.max(...rowsR) + 1) / 2);
+  const lh = 34, lw = Math.round(61 * lh / 202), edgeL = cx(minx) - RIM - 2, edgeR = cx(maxx + 1) + RIM + 2;
+  img('tin_latch', edgeL - lw + 2, midL - lh / 2, lw, lh);
+  img('tin_latch', edgeR - 2, midR - lh / 2, lw, lh, 'transform:scaleX(-1)');
+}
+
+/* ======================= Cơm ======================= */
+LEVEL.rice.full.forEach(([x, y]) => img('rice_cell', cx(x), cy(y), C, C));
+LEVEL.rice.half.forEach(([x, y, r]) => img('rice_half', cx(x), cy(y), C, C, `transform:rotate(${r}deg)`));
+img('food_egg', cx(5) + 1, cy(5) + 3, C - 2);
+
+/* khung ô để soát (bật bằng ô tick) */
+let gb = '';
+for (let x = 0; x < 7; x++) for (let y = 0; y < 10; y++) gb += `<rect x="${cx(x)}" y="${cy(y)}" width="${C}" height="${C}"/>`;
+add(`<svg class="grid" width="390" height="844" style="left:0;top:0" fill="none" stroke="#E0475A" stroke-width=".8" opacity=".8">${gb}</svg>`);
+
+/* ======================= Tay bài ======================= */
+const HY = BY + BH + 8, PX0 = 76, PX1 = 376, PH = 116;
+img('btn_undo', 14, HY + (PH - 52) / 2, 52);
+add(`<div style="left:${PX0}px;top:${HY}px;width:${PX1 - PX0}px;height:${PH}px;border-radius:22px;background:#E2D4C2"></div>`);
+const CARDS = [['mold', 'Khuôn 2×2'], ['line', 'Thẳng 2'], ['fn', 'Xoay']];
+const CW = 84, CH = 104, GAP = 14, X0 = PX0 + (PX1 - PX0 - (CARDS.length * CW + (CARDS.length - 1) * GAP)) / 2;
+CARDS.forEach(([k, name], i) => {
+  const x = X0 + i * (CW + GAP), y = HY + (PH - CH) / 2;
+  add(`<div class="card ${k}" style="left:${x}px;top:${y}px"></div>`);
+  const g = 16, gx = x + (CW - 3 * g) / 2, gy = y + 14;
+  if (k === 'fn') img('icon_rotate', x + 19, y + 15, 46);
+  else {
+    let s = '';
+    for (let a = 0; a <= 3; a++) s += `<line x1="${gx + a * g}" y1="${gy}" x2="${gx + a * g}" y2="${gy + 3 * g}"/><line x1="${gx}" y1="${gy + a * g}" x2="${gx + 3 * g}" y2="${gy + a * g}"/>`;
+    const art = k === 'mold'
+      ? `<rect x="${gx + g * .5}" y="${gy + g * .5}" width="${2 * g}" height="${2 * g}" fill="#F0A050" fill-opacity=".3" stroke="#E8873C" stroke-width="4" stroke-linejoin="round"/>`
+      : `<line x1="${gx + g * .5}" y1="${gy + g * 1.5}" x2="${gx + g * 2.5}" y2="${gy + g * 1.5}" stroke="#E2675A" stroke-width="5" stroke-linecap="round"/>`;
+    add(`<svg width="390" height="844" style="left:0;top:0"><g stroke="#E6D6C2" stroke-width="1.2">${s}</g>${art}</svg>`);
+  }
+  add(`<div class="lbl" style="left:${x + CW / 2}px;top:${y + 86}px">${name}</div>`);
+});
+
+/* ======================= Booster + banner ======================= */
+const BYB = HY + PH + 18 + 26;
+[['booster_hint', 'Gợi ý'], ['booster_wand', 'Booster 2'], ['booster_locked', 'Lv 15']].forEach(([n, t], k) => {
+  const x = 113 + k * 82;
+  img(n, x - 26, BYB - 26, 52);
+  add(`<div class="lbl" style="left:${x}px;top:${BYB + 36}px">${t}</div>`);
+});
+img('badge_red', 206, BYB - 30, 20);
+add(`<div class="lbl" style="left:216px;top:${BYB - 20}px;color:#fff;font-weight:900">2</div>`);
+add(`<div style="left:0;top:788px;width:390px;height:56px;background:#ECE8E2"></div>`);
+add(`<div class="lbl" style="left:195px;top:816px;color:#A0968C;font-size:12px">Banner quảng cáo 320×50</div>`);
+
+/* ======================= Co giãn khung ======================= */
+const frame = document.getElementById('frame');
+const q = new URLSearchParams(location.search);
+if (q.has('bare')) {   // chế độ chụp ảnh 390×844
+  document.body.innerHTML = ''; document.body.appendChild(stage);
+  if (q.has('grid')) document.body.classList.add('showgrid');
+} else {
+  const fit = () => { stage.style.transform = `scale(${frame.clientWidth / 390})`; };
+  new ResizeObserver(fit).observe(frame); fit();
+  document.getElementById('g').onchange = e => document.body.classList.toggle('showgrid', e.target.checked);
+}
+</script>
+</body>
+</html>
