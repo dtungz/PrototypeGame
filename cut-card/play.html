@@ -29,7 +29,7 @@
   .hint { left: 50%; transform: translateX(-50%); max-width: 280px; text-align: center; padding: 6px 14px; border-radius: 14px; background: rgba(255, 246, 230, .92);
     color: var(--ink); font-size: 12.5px; font-weight: 800; line-height: 1.3; box-shadow: 0 2px 6px rgba(90,60,40,.18); transition: opacity .4s; pointer-events: none; }
   .hint.off { opacity: 0; }
-  .hand { left: 76px; width: 300px; height: 116px; border-radius: 22px; background: #E2D4C2; display: flex; align-items: center; justify-content: center; gap: 14px; touch-action: none; }
+  .hand { height: 116px; border-radius: 22px; background: #E2D4C2; display: flex; align-items: center; justify-content: center; gap: 8px; touch-action: none; }
   .card { position: relative; width: 84px; height: 104px; border-style: solid; border-width: 22px 22px 24px 22px; cursor: grab; touch-action: none; transition: opacity .15s; }
   .card.line { border-image: url(assets/card_line.png) 44 44 48 44 fill / 22px 22px 24px 22px; }
   .card.mold { border-image: url(assets/card_mold.png) 44 44 48 44 fill / 22px 22px 24px 22px; }
@@ -40,6 +40,11 @@
   .card .rot { position: absolute; right: -16px; top: -16px; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 1.5px solid #B9A28E; color: #8A6A55;
     font-size: 11px; line-height: 15px; text-align: center; font-weight: 900; }
   .card.dragging { opacity: .25; }
+  .slot-empty { width: 84px; height: 104px; border-radius: 16px; border: 2px dashed rgba(122,98,82,.25); }
+  .card.enter { animation: enter .32s ease-out; }
+  @keyframes enter { from { transform: translateY(40px) scale(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+  .queue { padding: 2px 9px; border-radius: 999px; background: #8E5E3E; color: #FFF6E6; font-size: 11px; font-weight: 900;
+    transform: translate(-100%, -50%); box-shadow: 0 2px 0 #6E4429; pointer-events: none; white-space: nowrap; }
   .card.shake { animation: shake .3s; }
   @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
   .empty { color: var(--ink); font-size: 12px; font-weight: 800; text-align: center; padding: 0 16px; }
@@ -76,8 +81,7 @@
     <!-- tay bài -->
     <img class="abs btn" id="undoBtn" src="assets/btn_undo.png" style="left:14px;width:52px" alt="Hoàn tác">
     <div class="abs hand" id="hand"></div>
-    <!-- booster -->
-    <div id="boosters"></div>
+    <div class="abs queue" id="queue"></div>
     <div class="abs" style="left:0;top:788px;width:390px;height:56px;background:#ECE8E2"></div>
     <div class="abs lbl" style="left:195px;top:816px;color:#A0968C;font-size:12px">Banner quảng cáo 320×50</div>
     <div class="abs toast" id="toast"></div>
@@ -118,6 +122,8 @@ const FN_GLUE = { fam: 'glue', kind: 'glue', name: 'Dán', icon: 'icon_glue', po
 
 const DIAMOND = [[1, 0, 1], [1, 0, 2], [0, 1, 1], [0, 1, 2], ...full([[1, 1]]), [2, 0, 2], [2, 0, 3], ...full([[2, 1]]), [3, 1, 2], [3, 1, 3],
                  [0, 2, 0], [0, 2, 1], ...full([[1, 2]]), [1, 3, 0], [1, 3, 1], ...full([[2, 2]]), [3, 2, 0], [3, 2, 3], [2, 3, 0], [2, 3, 3]];
+const MOLD1 = { fam: 'mold', name: 'Khuôn 1', polys: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] };
+/* 14 màn dạy: tới Level 14 đã giới thiệu đủ cơ chế. Level 15–20 sẽ sinh bằng levelkit.js (genLevels) rồi dán vào đây. */
 const LEVELS = [
   { hint: 'Kéo thẻ lên cơm để cắt, rồi ráp các miếng cho kín hộp.',
     rice: [{ s: full(R(4, 1)), at: [1, 7] }], tray: { s: full(R(2, 2)), at: [2, 1] }, cards: [LINEV(1)] },
@@ -129,28 +135,36 @@ const LEVELS = [
     rice: [{ s: full(R(5, 1)), at: [1, 7] }], tray: { s: full(R(3, 2)), at: [2, 1], fixed: [{ kind: 'egg', cells: [[1, 0]] }] }, cards: [LINEV(1), LINEV(1)] },
   { hint: 'Hộp có vách ngăn (vạch đậm): miếng cơm không được nằm vắt qua vách.',
     rice: [{ s: full(R(2, 3)), at: [2, 6] }], tray: { s: full(R(3, 2)), at: [2, 1], walls: [[1, 0, 1, 2]] }, cards: [LINE(2), LINEV(1)] },
-  { hint: 'Miếng cơm không tự xoay được. Kéo thẻ Xoay lên miếng cơm. Chạm thẻ để đổi chiều.',
-    rice: [{ s: full(R(3, 2)), at: [2, 7] }], tray: { s: full(R(2, 3)), at: [2, 1] }, cards: [FN_ROT] },
-  { hint: 'Xoay mấy cũng không vừa? Thẻ Lật soi gương miếng cơm. Chạm thẻ để đổi ngang / dọc.',
-    rice: [{ s: full([[1, 0], [2, 0], [0, 1], [1, 1]]), at: [2, 7] }], tray: { s: full([[0, 0], [1, 0], [1, 1], [2, 1]]), at: [2, 1] }, cards: [FN_FLIP] },
-  { hint: 'Thẻ chữ T chia miếng cơm thành 3 phần.',
-    rice: [{ s: full(R(2, 2)), at: [2, 7] }], tray: { s: full([[0, 0], [1, 0], [1, 1], [1, 2]]), at: [2, 1] }, cards: [TCUT] },
   { hint: 'Khuôn 2×2 lấy ra đúng một khối vuông. Hộp có sẵn xúc xích.',
     rice: [{ s: full(R(4, 2)), at: [1, 7] }],
     tray: { s: full([[1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [3, 1], [0, 2], [1, 2], [2, 2], [3, 2]]), at: [1, 1], fixed: [{ kind: 'sausage', cells: [[1, 2], [2, 2]] }] },
     cards: [MOLD2] },
-  { hint: 'Chỉ có 1 thẻ Xoay mà cần xoay 2 miếng? Đặt 2 miếng sát nhau, Dán lên đường nối, rồi xoay cả khối.',
-    rice: [{ s: full(R(3, 1)), at: [1, 6] }, { s: full(R(3, 1)), at: [3, 8] }], tray: { s: full(R(2, 3)), at: [2, 1] }, cards: [FN_GLUE, FN_ROT] },
-  { hint: 'Thẻ Nhân bản tạo thêm một miếng giống hệt (miếng tối đa 2 ô).',
-    rice: [{ s: full(R(2, 1)), at: [2, 7] }], tray: { s: full(R(3, 2)), at: [2, 1], fixed: [{ kind: 'meat', cells: [[2, 0], [2, 1]] }] }, cards: [FN_COPY] },
+  { hint: 'Thẻ chữ T chia miếng cơm thành 3 phần.',
+    rice: [{ s: full(R(2, 2)), at: [2, 7] }], tray: { s: full([[0, 0], [1, 0], [1, 1], [1, 2]]), at: [2, 1] }, cards: [TCUT] },
+  { hint: 'Thẻ chéo cắt xéo qua ô: ra 2 miếng tam giác.',
+    rice: [{ s: full(R(2, 2)), at: [2, 7] }],
+    tray: { s: [[0, 0, 0], [0, 0, 1], ...full([[1, 0]]), [1, 1, 0], [1, 1, 1], [2, 0, 2], [2, 0, 3], ...full([[2, 1]]), [3, 1, 2], [3, 1, 3]], at: [1, 1] }, cards: [DIAG(2)] },
+  { hint: 'Chéo 1 chỉ cắt xéo một ô. Hộp hình con thuyền.',
+    rice: [{ s: full(R(2, 1)), at: [2, 7] }], tray: { s: [[0, 0, 1], [0, 0, 2], ...full([[1, 0]]), [2, 0, 0], [2, 0, 3]], at: [2, 2] }, cards: [DIAGA(1)] },
   { hint: 'Hộp hình viên kẹo ◇. Thẻ chéo hai hướng là chìa khoá.',
     rice: [{ s: full(R(4, 2)), at: [1, 7] }], tray: { s: DIAMOND, at: [1, 1] }, cards: [LINEV(2), DIAGA(2), DIAG(2)] },
+  { hint: 'Miếng cơm không tự xoay được. Kéo thẻ Xoay lên miếng cơm. Chạm thẻ để đổi chiều.',
+    rice: [{ s: full(R(3, 2)), at: [2, 7] }], tray: { s: full(R(2, 3)), at: [2, 1] }, cards: [FN_ROT] },
+  { hint: 'Xoay mấy cũng không vừa? Thẻ Lật soi gương miếng cơm. Chạm thẻ để đổi ngang / dọc.',
+    rice: [{ s: full([[1, 0], [2, 0], [0, 1], [1, 1]]), at: [2, 7] }], tray: { s: full([[0, 0], [1, 0], [1, 1], [2, 1]]), at: [2, 1] }, cards: [FN_FLIP] },
+  { hint: 'Chỉ có 1 thẻ Xoay mà cần xoay 2 miếng? Đặt 2 miếng sát nhau, Dán lên đường nối, rồi xoay cả khối.',
+    rice: [{ s: full(R(3, 1)), at: [1, 6] }, { s: full(R(3, 1)), at: [3, 8] }], tray: { s: full(R(2, 3)), at: [2, 1] }, cards: [FN_GLUE, FN_ROT] },
+  { hint: 'Tay chỉ giữ 3 thẻ, thẻ thứ 4 chờ vào chỗ thẻ vừa dùng. Nhân bản tạo thêm miếng giống hệt.',
+    rice: [{ s: full(R(4, 1)), at: [1, 7] }], tray: { s: full(R(2, 3)), at: [2, 1] }, cards: [LINE(3), LINEV(2), LINEV(1), FN_COPY] },
 ];
 
 /* ======================= Bố cục màn hình (px, khung 390×844) ======================= */
-const COLS = 7, ROWS = 10, CPX = 40, OPX = 12, BX = 43, BY = 150;
+// Không có booster: thớt dùng ô 44px (to hơn bản có booster ~10%), căn giữa ngang;
+// khoảng trống chia đều: kệ -> thớt -> tay bài -> banner (banner bắt đầu ở y = 788)
+const COLS = 7, ROWS = 10, CPX = 44, OPX = 12, HAND_H = 116, BY = 154;
+const BX = (390 - (COLS * CPX + 2 * OPX)) / 2;
 const BW = COLS * CPX + 2 * OPX, BH = ROWS * CPX + 2 * OPX, PAD = OPX / CPX;
-const HY = BY + BH + 8;
+const HY = BY + BH + Math.round((788 - BY - BH - HAND_H) / 2);
 const FOOD = { egg: 'food_egg', sausage: 'food_sausage', meat: 'food_pork_belly' };
 const TIN = { well: '#B3A396', wellSh: '#8C7F74', wall: '#DACEC3', rim: '#E5D8CD', rimSh: '#C4B8AC', outline: '#968C84' };
 const RIM = 9 / CPX;
@@ -174,6 +188,7 @@ function loadLevel(i) {
     walls: (tr.walls || []).map(([x1, y1, x2, y2]) => [x1 + tr.at[0], y1 + tr.at[1], x2 + tr.at[0], y2 + tr.at[1]]),
     fixed: (tr.fixed || []).map(f => ({ kind: f.kind, cells: f.cells.map(([x, y]) => [x + tr.at[0], y + tr.at[1]]) })) }];
   hand = L.cards.map(c => ({ def: c, rot: 0, used: false }));
+  dealSlots();
   history = []; won = false;
   $('lvName').textContent = `Level ${levelIdx + 1}`;
   $('lvSel').value = String(levelIdx);
@@ -324,8 +339,8 @@ function checkWin() {
   $('nextLbl').textContent = last ? 'Chơi lại từ đầu' : 'Tiếp tục';
   setTimeout(() => { $('win').classList.add('on'); sfx('win'); }, 350);
 }
-function pushHistory() { history.push(clone({ foods, trays, nextId, hand: hand.map(h => ({ rot: h.rot, used: h.used })) })); }
-function undo() { const s = history.pop(); if (!s) return; foods = s.foods; trays = s.trays; nextId = s.nextId; s.hand.forEach((h, i) => Object.assign(hand[i], h)); renderHand(); }
+function pushHistory() { history.push(clone({ foods, trays, nextId, slots, qp, hand: hand.map(h => ({ rot: h.rot, used: h.used })) })); }
+function undo() { const s = history.pop(); if (!s) return; foods = s.foods; trays = s.trays; nextId = s.nextId; slots = s.slots; qp = s.qp; s.hand.forEach((h, i) => Object.assign(hand[i], h)); renderHand(); }
 
 /* ======================= Vẽ bằng asset ======================= */
 function triPts(x, y, t) { const c = [x + .5, y + .5], P = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]]; return [P[t], P[(t + 1) % 4], c]; }
@@ -473,12 +488,25 @@ function cardArt(card) {
   });
   return s;
 }
+/* Tay bài: 3 ô cố định (slots giữ chỉ số thẻ trong `hand`). Dùng thẻ ở ô k thì thẻ kế tiếp trong hàng chờ
+   (qp) trượt vào đúng ô k. Hết hàng chờ thì ô đó trống. */
+const SLOTS = 3;
+let slots = [], qp = 0, entering = -1;
+function dealSlots() { slots = []; for (let k = 0; k < SLOTS; k++) slots.push(k < hand.length ? k : -1); qp = Math.min(SLOTS, hand.length); }
+function useCard(i) {
+  hand[i].used = true;
+  const k = slots.indexOf(i);
+  if (k >= 0) { slots[k] = qp < hand.length ? qp++ : -1; entering = slots[k]; }
+}
 function renderHand() {
   handEl.innerHTML = '';
-  hand.forEach((c, i) => {
-    if (c.used) return;
+  const queued = hand.length - qp;
+  slots.forEach((i, k) => {
+    if (i < 0) { const e = document.createElement('div'); e.className = 'slot-empty'; handEl.appendChild(e); return; }
+    const c = hand[i];
     const d = document.createElement('div');
-    d.className = 'card ' + c.def.fam; d.dataset.i = i;
+    if (i === entering) d.classList.add('enter');
+    d.classList.add('card', c.def.fam); d.dataset.i = i;
     d.appendChild(c.def.fam === 'glue' ? (() => { const s = document.createElementNS(NS, 'svg'); s.setAttribute('class', 'art'); s.setAttribute('viewBox', '0 0 60 60');
       el('image', { href: 'assets/icon_glue.png', x: 8, y: 6, width: 44, height: 44, preserveAspectRatio: 'xMidYMid meet' }, s);
       el('line', { x1: c.rot % 2 ? 30 : 12, y1: c.rot % 2 ? 12 : 54, x2: c.rot % 2 ? 30 : 48, y2: c.rot % 2 ? 48 : 54, stroke: '#3E9A4C', 'stroke-width': 3, 'stroke-dasharray': '1 4', 'stroke-linecap': 'round' }, s); return s; })() : cardArt(c));
@@ -487,7 +515,9 @@ function renderHand() {
     d.addEventListener('pointerdown', e => cardDown(e, i, d));
     handEl.appendChild(d);
   });
-  if (!hand.some(c => !c.used)) { const p = document.createElement('div'); p.className = 'empty'; p.textContent = 'Hết thẻ. Xếp cơm vào hộp, hoặc hoàn tác.'; handEl.appendChild(p); }
+  entering = -1;
+  if (!hand.some(c => !c.used)) { handEl.innerHTML = ''; const p = document.createElement('div'); p.className = 'empty'; p.textContent = 'Hết thẻ. Xếp cơm vào hộp, hoặc hoàn tác.'; handEl.appendChild(p); }
+  const qb = $('queue'); qb.style.display = queued > 0 ? 'block' : 'none'; qb.textContent = `+${queued} thẻ chờ`;
   render();
 }
 
@@ -545,7 +575,7 @@ function endDrag(e, cancelled) {
     if (res.kind === 'cut') { applyCut(res); lastCut = { segs: res.segs, color: '#fff' }; sfx('cut'); }
     else if (res.kind === 'glue') { applyGlue(res); lastCut = { segs: res.segs, color: '#9be59b' }; sfx('pop'); }
     else { applyFn(res); sfx('pop'); }
-    card.used = true; $('hint').classList.add('off'); renderHand(); checkWin();
+    useCard(dr.i); $('hint').classList.add('off'); renderHand(); checkWin();
   } else {
     if (res && res.why) showHint(res.why, 2500);
     renderHand(); sfx('bad');
@@ -574,13 +604,11 @@ function sfx(kind) {
 /* ======================= Khởi động ======================= */
 Object.assign($('boardBg').style, { left: BX + 'px', top: BY + 'px', width: BW + 'px', height: BH + 'px' });
 Object.assign(svg.style, { left: BX + 'px', top: BY + 'px', width: BW + 'px', height: BH + 'px' });
-$('hand').style.top = HY + 'px'; $('undoBtn').style.top = (HY + 32) + 'px';
-const BYB = HY + 116 + 18 + 26;
-$('boosters').innerHTML = [['booster_hint', 'Gợi ý'], ['booster_wand', 'Booster 2'], ['booster_locked', 'Lv 15']].map(([n, t], k) =>
-  `<img class="abs btn" data-b="${k}" src="assets/${n}.png" style="left:${113 + k * 82 - 26}px;top:${BYB - 26}px;width:52px">
-   <div class="abs lbl" style="left:${113 + k * 82}px;top:${BYB + 36}px">${t}</div>`).join('') +
-  `<img class="abs" src="assets/badge_red.png" style="left:206px;top:${BYB - 30}px;width:20px"><div class="abs lbl" style="left:216px;top:${BYB - 20}px;color:#fff;font-weight:900">2</div>`;
-document.querySelectorAll('[data-b]').forEach(b => b.onclick = () => toast(b.dataset.b === '2' ? 'Mở ở Level 15' : 'Booster chưa chốt (Q-08)'));
+// hàng dưới thẳng mép với thớt: nút hoàn tác ở mép trái thớt, khung tay bài kéo tới mép phải thớt
+Object.assign($('hand').style, { top: HY + 'px', left: (BX + 52 + 8) + 'px', width: (BW - 52 - 8) + 'px' });
+Object.assign($('undoBtn').style, { top: (HY + (HAND_H - 52) / 2) + 'px', left: BX + 'px' });
+Object.assign($('queue').style, { left: (BX + BW - 6) + 'px', top: HY + 'px' });   // nhãn "+N thẻ chờ" ở góc trên-phải khung tay bài
+$('hint').style.top = (BY + BH - 58) + 'px';
 $('adsBtn').onclick = () => toast('Gỡ quảng cáo: chưa làm');
 LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = `Level ${i + 1}`; $('lvSel').appendChild(o); });
 $('lvSel').onchange = e => loadLevel(+e.target.value);
@@ -597,18 +625,19 @@ loadLevel(+(new URLSearchParams(location.search).get('lv') || 1) - 1);
 if (new URLSearchParams(location.search).has('win')) { $('winInfo').textContent = `Level ${levelIdx + 1} xong.`; $('hint').classList.add('off'); $('win').classList.add('on'); }
 /* ?cut1: Level 1 sau khi cắt một nhát (để chụp so trước / sau khi cắt) */
 if (new URLSearchParams(location.search).has('cut1')) {
-  loadLevel(0); const r = evaluateCut(hand[0], 3, 7); if (r.valid) { applyCut(r); hand[0].used = true; }
+  loadLevel(0); const r = evaluateCut(hand[0], 3, 7); if (r.valid) { applyCut(r); useCard(0); }
   $('hint').classList.add('off'); renderHand();
 }
 /* ?demo: dựng sẵn trạng thái giữa Level 12 (có nửa ô cơm) để chụp ảnh soát hình */
 if (new URLSearchParams(location.search).has('demo')) {
   loadLevel(11);
-  const cut = (i, ox, oy) => { const r = evaluateCut(hand[i], ox, oy); if (r.valid) { applyCut(r); hand[i].used = true; } };
+  const cut = (i, ox, oy) => { const r = evaluateCut(hand[i], ox, oy); if (r.valid) { applyCut(r); useCard(i); } };
   cut(0, 3, 7); cut(1, 1, 7); cut(2, 3, 7);
   const half = foods.find(f => f.tris.length === 8 && f.tris.every(q => q[0] === 1 || q[0] === 2) && f.tris.some(q => q[1] === 8 && q[0] === 1 && q[2] === 3));
   if (half) half.tris = shift(half.tris, 0, -5);
   $('hint').classList.add('off'); renderHand();
 }
 </script>
+<script src="levelkit.js"></script>
 </body>
 </html>
