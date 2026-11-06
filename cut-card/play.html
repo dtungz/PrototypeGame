@@ -48,7 +48,9 @@
   .toast.on { opacity: 1; }
   .win { left: 0; top: 0; width: 390px; height: 844px; background: rgba(40,25,18,.32); display: none; }
   .win.on { display: block; }
-  .pop { left: 45px; top: 380px; width: 300px; height: 270px; border-style: solid; border-width: 28px; border-image: url(assets/popup.png) 56 56 60 56 fill / 28px 28px 30px 28px; }
+  /* popup vẽ bằng CSS cùng màu ảnh popup.png: kéo giãn 9-slice quá nhiều theo chiều dọc làm lộ đường nối giữa các mảnh */
+  .pop { left: 45px; top: 287px; width: 300px; height: 270px; border-radius: 26px; background: #FDF4E8;
+    border: 3px solid #DFCCB2; box-shadow: inset 0 0 0 3px #F3E8DA, 0 4px 0 #D9C6AA, 0 10px 24px rgba(60,35,20,.25); }
 </style>
 </head>
 <body>
@@ -82,11 +84,11 @@
     <!-- popup thắng -->
     <div class="abs win" id="win">
       <div class="abs pop"></div>
-      <img class="abs" src="assets/mascot_egg.png" style="left:150px;top:396px;width:90px">
-      <div class="abs lbl" style="left:195px;top:500px;font-size:28px;font-weight:900">Hoàn thành!</div>
-      <div class="abs lbl" id="winInfo" style="left:195px;top:532px;font-size:14px;opacity:.8"></div>
-      <img class="abs btn" id="nextBtn" src="assets/btn_pill_green.png" style="left:115px;top:562px;width:160px">
-      <div class="abs t" id="nextLbl" style="left:195px;top:589px;font-size:19px;-webkit-text-stroke-color:#5E8A3A">Tiếp tục</div>
+      <img class="abs" src="assets/mascot_egg.png" style="left:150px;top:303px;width:90px">
+      <div class="abs lbl" style="left:195px;top:407px;font-size:28px;font-weight:900">Hoàn thành!</div>
+      <div class="abs lbl" id="winInfo" style="left:195px;top:439px;font-size:14px;opacity:.8"></div>
+      <img class="abs btn" id="nextBtn" src="assets/btn_pill_green.png" style="left:115px;top:469px;width:160px">
+      <div class="abs t" id="nextLbl" style="left:195px;top:496px;font-size:19px;-webkit-text-stroke-color:#5E8A3A">Tiếp tục</div>
     </div>
   </div></div>
 </div>
@@ -591,6 +593,8 @@ const frame = $('frame'), stage = $('stage');
 const fit = () => { stage.style.transform = `scale(${frame.clientWidth / 390})`; };
 new ResizeObserver(fit).observe(frame); fit();
 loadLevel(+(new URLSearchParams(location.search).get('lv') || 1) - 1);
+/* ?win: hiện popup Hoàn thành (để chụp ảnh soát vị trí) */
+if (new URLSearchParams(location.search).has('win')) { $('winInfo').textContent = `Level ${levelIdx + 1} xong.`; $('hint').classList.add('off'); $('win').classList.add('on'); }
 /* ?cut1: Level 1 sau khi cắt một nhát (để chụp so trước / sau khi cắt) */
 if (new URLSearchParams(location.search).has('cut1')) {
   loadLevel(0); const r = evaluateCut(hand[0], 3, 7); if (r.valid) { applyCut(r); hand[0].used = true; }
