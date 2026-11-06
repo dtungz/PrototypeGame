@@ -343,17 +343,16 @@ const image = (parent, name, x, y, w, h, extra = {}) => el('image', { href: `ass
 const byCell = tris => { const m = new Map(); tris.forEach(([x, y, t]) => { const k = x + ',' + y; if (!m.has(k)) m.set(k, { x, y, ts: new Set() }); m.get(k).ts.add(t); }); return [...m.values()]; };
 const HALF = [[[0, 3], 0], [[0, 1], 90], [[1, 2], 180], [[2, 3], 270]];   // nửa ô: cặp tam giác -> góc xoay ảnh rice_half
 
-/* Cơm: ô đủ 4 tam giác dùng rice_cell; nửa ô dùng rice_half xoay; trường hợp khác cắt rice_cell theo tam giác */
+/* Cơm: mỗi MIẾNG là một khối liền phủ vân cơm (rice_texture, ghép liền mạch), chỉ có viền + gờ đáy ở mép ngoài
+   của miếng. Cắt xong mỗi miếng mới có viền riêng nên thấy rõ đường cắt. */
 function drawRice(parent, f, dx = 0, dy = 0) {
   const g = el('g', { transform: `translate(${dx} ${dy})` }, parent);
-  byCell(f.tris).forEach(({ x, y, ts }) => {
-    if (ts.size === 4) { image(g, 'rice_cell', x, y, 1, 1); return; }
-    const h = ts.size === 2 && HALF.find(([pair]) => pair.every(t => ts.has(t)));
-    if (h) { image(g, 'rice_half', x, y, 1, 1, { transform: `rotate(${h[1]} ${x + .5} ${y + .5})` }); return; }
-    const id = 'cp' + (uid++), cp = el('clipPath', { id }, g);
-    ts.forEach(t => el('polygon', { points: ptsStr(triPts(x, y, t)) }, cp));
-    image(g, 'rice_cell', x, y, 1, 1, { 'clip-path': `url(#${id})` });
-  });
+  const edge = boundary(f.tris).map(([p, q]) => `M${p[0]} ${p[1]}L${q[0]} ${q[1]}`).join('');
+  el('path', { d: edge, stroke: '#CDB797', 'stroke-width': .1, 'stroke-linecap': 'round', transform: 'translate(0 .07)' }, g);   // gờ đáy
+  const body = el('g', { fill: 'url(#riceTex)', stroke: 'url(#riceTex)', 'stroke-width': .02 }, g);
+  f.tris.forEach(q => el('polygon', { points: ptsStr(triPts(...q)) }, body));
+  el('path', { d: edge, stroke: '#D9CAB2', 'stroke-width': .065, 'stroke-linecap': 'round' }, g);    // viền miếng
+  el('path', { d: edge, stroke: '#FFFFFF', 'stroke-width': .025, 'stroke-linecap': 'round', opacity: .8, transform: 'translate(0 .035)' }, g);   // sáng mép trong
   return g;
 }
 /* Khay hộp sắt: vành = nét tô dày bo tròn quanh hình khay; ngăn lõm theo ô, ô có món cố định gộp thành 1 ngăn */
@@ -411,6 +410,8 @@ function render() {
   uid = 0; svg.innerHTML = '';
   svg.setAttribute('viewBox', `${-PAD} ${-PAD} ${COLS + 2 * PAD} ${ROWS + 2 * PAD}`);
   const defs = el('defs', {}, svg); const fl = el('filter', { id: 'blur', x: '-20%', y: '-20%', width: '140%', height: '160%' }, defs); el('feGaussianBlur', { stdDeviation: .07 }, fl);
+  const pat = el('pattern', { id: 'riceTex', patternUnits: 'userSpaceOnUse', width: 1, height: 1 }, defs);
+  el('image', { href: 'assets/rice_texture.png', x: 0, y: 0, width: 1, height: 1, preserveAspectRatio: 'none' }, pat);
   let gl = ''; for (let i = 1; i < COLS; i++) gl += `M${i} 0V${ROWS}`; for (let j = 1; j < ROWS; j++) gl += `M0 ${j}H${COLS}`;
   el('path', { d: gl, stroke: '#DEC8A8', 'stroke-width': .025 }, svg);
 
@@ -590,6 +591,11 @@ const frame = $('frame'), stage = $('stage');
 const fit = () => { stage.style.transform = `scale(${frame.clientWidth / 390})`; };
 new ResizeObserver(fit).observe(frame); fit();
 loadLevel(+(new URLSearchParams(location.search).get('lv') || 1) - 1);
+/* ?cut1: Level 1 sau khi cắt một nhát (để chụp so trước / sau khi cắt) */
+if (new URLSearchParams(location.search).has('cut1')) {
+  loadLevel(0); const r = evaluateCut(hand[0], 3, 7); if (r.valid) { applyCut(r); hand[0].used = true; }
+  $('hint').classList.add('off'); renderHand();
+}
 /* ?demo: dựng sẵn trạng thái giữa Level 12 (có nửa ô cơm) để chụp ảnh soát hình */
 if (new URLSearchParams(location.search).has('demo')) {
   loadLevel(11);
