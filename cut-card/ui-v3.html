@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thẻ Cắt · Mockup UI v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root { --bg: #2c211d; --panel: #3a2c26; --ink: #f6eadb; --muted: #c7b3a3; --accent: #f2b544; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: Nunito, "Segoe UI", system-ui, sans-serif; }
+  .wrap { min-height: 100%; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px 16px 20px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; }
+  .bar button, .bar a { font: inherit; font-weight: 800; font-size: .82rem; padding: 7px 12px; border-radius: 999px; border: 2px solid #5a4338;
+    background: var(--panel); color: var(--ink); cursor: pointer; text-decoration: none; }
+  .bar button.on { background: var(--accent); color: #3e2a22; border-color: #3e2a22; }
+  h1 { margin: 0; font-size: 1.05rem; font-weight: 900; text-align: center; }
+  h1 small { display: block; font-weight: 700; color: var(--muted); font-size: .78rem; }
+  .phone { width: min(390px, 100%, calc((100vh - 150px) * 390 / 844)); aspect-ratio: 390 / 844; border-radius: 34px; overflow: hidden;
+    box-shadow: 0 0 0 8px #120d0b, 0 18px 40px rgba(0,0,0,.5); }
+  .phone svg { width: 100%; height: 100%; display: block; }
+  .note { max-width: 560px; color: var(--muted); font-size: .8rem; line-height: 1.45; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Thẻ Cắt · Mockup UI màn chơi v3<small>Tông ấm dịu, kệ gỗ có linh vật, thớt to · bản HTML thay cho Figma</small></h1>
+  <div class="bar" id="tabs"></div>
+  <div class="phone" id="phone"></div>
+  <div class="bar"><button id="dl">Tải SVG trạng thái này</button><a href="./">Chơi prototype v4</a></div>
+  <p class="note">File SVG tải về có thể kéo thả thẳng vào Figma để thành lớp vector chỉnh sửa được.</p>
+</div>
+<script>
+/* ======================= Bảng màu (Ấm dịu) ======================= */
+const K = {
+  wall: '#8F4E3B', wallLine: '#83463A', bg: '#A65F49', bgLine: '#9A5743',
+  shelf: '#C6905F', shelfHi: '#D9A673', shelfFront: '#9C6A45',
+  board: '#B8775A', boardIn: '#C78E6C', grid: '#B67E5E',
+  tin: '#A3ADB5', tinHi: '#BCC5CC', well: '#C6CED4', ink: '#3E2A22',
+  rice: '#FCF9F3', grain: '#E9E0CF',
+  wood: '#C6905F', woodDark: '#8E5E3E', cream: '#FFF1DC', red: '#E0475A', green: '#5FB84C', yellow: '#F2B544',
+};
+const W = 390, H = 844, C = 40, O = 12, BX = 43, BY = 154;   // ô 40px, lề thớt 12, gốc thớt
+const BW = 7 * C + 2 * O, BH = 10 * C + 2 * O;
+const cx = x => BX + O + x * C, cy = y => BY + O + y * C;
+const R = (w, h, x0 = 0, y0 = 0) => { const a = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) a.push([x + x0, y + y0]); return a; };
+const TRAY = [[2,1],[3,1],[1,2],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3]];
+
+/* Viền ngoài của một tập ô (các đoạn cạnh không giáp ô cùng tập) */
+function edges(cells) {
+  const s = new Set(cells.map(c => c.join(','))), out = [];
+  cells.forEach(([x, y]) => {
+    if (!s.has(`${x},${y-1}`)) out.push([x, y, x+1, y]);
+    if (!s.has(`${x+1},${y}`)) out.push([x+1, y, x+1, y+1]);
+    if (!s.has(`${x},${y+1}`)) out.push([x, y+1, x+1, y+1]);
+    if (!s.has(`${x-1},${y}`)) out.push([x, y, x, y+1]);
+  });
+  return out.map(([a, b, c, d]) => `M${cx(a)} ${cy(b)} L${cx(c)} ${cy(d)}`).join(' ');
+}
+const rects = (cells, attrs) => cells.map(([x, y]) => `<rect x="${cx(x)}" y="${cy(y)}" width="${C + .5}" height="${C + .5}" ${attrs}/>`).join('');
+const bbox = cells => { const xs = cells.map(c => c[0]), ys = cells.map(c => c[1]); return { x0: Math.min(...xs), x1: Math.max(...xs) + 1, y0: Math.min(...ys), y1: Math.max(...ys) + 1 }; };
+
+/* ======================= Thành phần ======================= */
+function wallAndShelf() {
+  let s = `<rect width="${W}" height="${H}" fill="${K.bg}"/>`;
+  for (let y = 196; y < H; y += 46) s += `<rect x="0" y="${y}" width="${W}" height="3" fill="${K.bgLine}"/>`;
+  s += `<rect width="${W}" height="128" fill="${K.wall}"/>`;
+  [[12,44,70,26],[110,20,90,30],[250,48,80,24],[300,10,70,22],[40,90,60,22],[200,84,70,24]].forEach(([x,y,w,h]) => s += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="5" fill="${K.wallLine}"/>`);
+  s += `<text x="${W - 70}" y="22" font-size="14" font-weight="800" fill="${K.cream}" opacity=".75">9:41</text>`;
+  return s;
+}
+function shelfFront() {
+  return `<rect x="-4" y="118" width="${W + 8}" height="22" rx="6" fill="${K.shelf}" stroke="${K.ink}" stroke-width="3.5"/>
+  <rect x="6" y="122" width="${W - 12}" height="4" rx="2" fill="${K.shelfHi}"/>
+  <rect x="0" y="139" width="${W}" height="9" fill="${K.shelfFront}"/><rect x="0" y="147" width="${W}" height="3" fill="${K.ink}" opacity=".35"/>`;
+}
+function egg(x, y, s = 1, extra = '') {
+  return `<g transform="translate(${x} ${y}) scale(${s})">
+    <path d="M6 30 q-6 -22 14 -24 q12 -12 26 0 q20 0 14 22 q4 14 -14 14 q-14 8 -26 0 q-18 2 -14 -12z" fill="#FFFFFF" stroke="${K.ink}" stroke-width="3.5"/>
+    <circle cx="31" cy="24" r="11" fill="#FFC533" stroke="${K.ink}" stroke-width="3"/>
+    <ellipse cx="27" cy="23" rx="1.9" ry="2.4" fill="${K.ink}"/><ellipse cx="35" cy="23" rx="1.9" ry="2.4" fill="${K.ink}"/>
+    <circle cx="27.6" cy="22.2" r=".7" fill="#fff"/><circle cx="35.6" cy="22.2" r=".7" fill="#fff"/>
+    <path d="M27 28 q4 3 8 0" stroke="${K.ink}" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+    <circle cx="23" cy="27" r="2" fill="#FF8F6B" opacity=".7"/><circle cx="39" cy="27" r="2" fill="#FF8F6B" opacity=".7"/>${extra}</g>`;
+}
+function shelfMascot() {
+  // linh vật trứng ngồi trên kệ, tay cầm một lá thẻ
+  const card = `<g transform="translate(44 6) rotate(14)"><rect width="16" height="21" rx="3" fill="#FFF4E2" stroke="${K.ink}" stroke-width="2.4"/><path d="M4 11 H12" stroke="#D6332A" stroke-width="2.6" stroke-linecap="round"/></g>`;
+  return egg(284, 68, 1.3, card);
+}
+function woodBtn(x, y, icon) {
+  return `<g><rect x="${x}" y="${y + 4}" width="52" height="52" rx="16" fill="${K.ink}"/><rect x="${x}" y="${y}" width="52" height="52" rx="16" fill="${K.wood}" stroke="${K.ink}" stroke-width="3.5"/>
+    <rect x="${x + 6}" y="${y + 5}" width="40" height="5" rx="2.5" fill="#fff" opacity=".18"/>
+    <g transform="translate(${x + 11} ${y + 11})" fill="none" stroke="${K.cream}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">${icon}</g></g>`;
+}
+const ICON = {
+  gear: (() => { let d = ''; for (let i = 0; i < 16; i++) { const a = Math.PI * i / 8 - Math.PI / 2, r = i % 2 ? 11 : 14.5; d += `${i ? 'L' : 'M'}${(15 + r * Math.cos(a - .17)).toFixed(1)} ${(15 + r * Math.sin(a - .17)).toFixed(1)} L${(15 + r * Math.cos(a + .17)).toFixed(1)} ${(15 + r * Math.sin(a + .17)).toFixed(1)} `; } return `<path d="${d}Z"/><circle cx="15" cy="15" r="4.5"/>`; })(),
+  undo: '<path d="M10 15 L4 9 L10 3"/><path d="M4 9 H18 A7 7 0 0 1 18 23 H12"/>',
+};
+function noAds(x, y) {
+  return `<g><circle cx="${x}" cy="${y + 3}" r="20" fill="${K.ink}"/><circle cx="${x}" cy="${y}" r="20" fill="${K.red}" stroke="${K.ink}" stroke-width="3.5"/>
+    <text x="${x}" y="${y + 6}" text-anchor="middle" font-size="13" font-weight="900" fill="${K.cream}" stroke="${K.ink}" stroke-width="3" paint-order="stroke">ADS</text>
+    <path d="M${x - 12} ${y - 12} L${x + 12} ${y + 12}" stroke="${K.cream}" stroke-width="3.5" stroke-linecap="round" opacity=".9"/></g>`;
+}
+function plaque(level, cards) {
+  const x = 112, w = 166;
+  return `<g>
+    <rect x="${x}" y="${44 + 4}" width="${w}" height="66" rx="18" fill="${K.ink}"/>
+    <rect x="${x}" y="44" width="${w}" height="66" rx="18" fill="${K.wood}" stroke="${K.ink}" stroke-width="4"/>
+    <rect x="${x + 10}" y="70" width="${w - 20}" height="32" rx="12" fill="${K.woodDark}" opacity=".55"/>
+    <g transform="translate(${x + 40} 66)"><rect x="9" y="2" width="18" height="25" rx="4" fill="#FFE6C2" stroke="${K.ink}" stroke-width="2.6" transform="rotate(10 18 14)"/>
+      <rect x="3" y="6" width="18" height="25" rx="4" fill="#FFF4E2" stroke="${K.ink}" stroke-width="2.6"/><path d="M7 18.5 H17" stroke="#D6332A" stroke-width="3" stroke-linecap="round"/></g>
+    <text x="${x + 106}" y="99" text-anchor="middle" font-size="30" font-weight="900" fill="${K.cream}" stroke="${K.ink}" stroke-width="6" paint-order="stroke">×${cards}</text>
+    <rect x="${x + 33}" y="28" width="${w - 66}" height="30" rx="12" fill="${K.woodDark}" stroke="${K.ink}" stroke-width="3.5"/>
+    <text x="${x + w / 2}" y="50" text-anchor="middle" font-size="19" font-weight="900" fill="${K.cream}">Level ${level}</text></g>`;
+}
+function boardBase() {
+  let g = '';
+  for (let i = 1; i < 7; i++) g += `M${cx(i)} ${cy(0)} V${cy(10)} `;
+  for (let j = 1; j < 10; j++) g += `M${cx(0)} ${cy(j)} H${cx(7)} `;
+  return `<rect x="${BX}" y="${BY + 5}" width="${BW}" height="${BH}" rx="24" fill="${K.ink}" opacity=".45"/>
+    <rect x="${BX}" y="${BY}" width="${BW}" height="${BH}" rx="24" fill="${K.board}" stroke="${K.ink}" stroke-width="4"/>
+    <rect x="${cx(0)}" y="${cy(0)}" width="${7 * C}" height="${10 * C}" rx="12" fill="${K.boardIn}"/>
+    <rect x="${cx(0)}" y="${cy(0)}" width="${7 * C}" height="${10 * C}" rx="12" fill="none" stroke="#000" stroke-opacity=".08" stroke-width="6"/>
+    <path d="${g}" stroke="${K.grid}" stroke-width="1.6"/>`;
+}
+function tin(cells) {
+  const b = bbox(cells), my = cy((b.y0 + b.y1) / 2);
+  let s = `<g filter="url(#soft)">${rects(cells, `fill="${K.tin}"`)}<path d="${edges(cells)}" stroke="${K.ink}" stroke-width="7" stroke-linecap="round"/></g>`;
+  s += cells.map(([x, y]) => `<rect x="${cx(x) + 5}" y="${cy(y) + 5}" width="${C - 10}" height="${C - 10}" rx="8" fill="${K.well}"/><rect x="${cx(x) + 8}" y="${cy(y) + 7}" width="${C - 18}" height="3" rx="1.5" fill="#fff" opacity=".45"/>`).join('');
+  // khoá cài hai bên hộp cơm sắt
+  [[cx(b.x0) - 9, my - 11], [cx(b.x1) + 1, my - 11]].forEach(([x, y]) => s += `<rect x="${x}" y="${y}" width="8" height="22" rx="3" fill="${K.tinHi}" stroke="${K.ink}" stroke-width="2.5"/>`);
+  return s;
+}
+function sausage(cells) {
+  const b = bbox(cells), x = cx(b.x0), y = cy(b.y0), w = (b.x1 - b.x0) * C, h = (b.y1 - b.y0) * C;
+  return `<g><rect x="${x + 5}" y="${y + 8}" width="${w - 10}" height="${h - 16}" rx="${(h - 16) / 2}" fill="#C8553D" stroke="${K.ink}" stroke-width="3"/>
+    <path d="M${x + w * .3} ${y + 14} l-5 ${h - 28} M${x + w * .5} ${y + 14} l-5 ${h - 28} M${x + w * .7} ${y + 14} l-5 ${h - 28}" stroke="#8E3324" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M${x + 14} ${y + 14} q${w * .3} -4 ${w * .6} 0" stroke="#EC9A80" stroke-width="3" stroke-linecap="round" fill="none"/></g>`;
+}
+function rice(cells, dim = 1) {
+  return `<g filter="url(#soft)" opacity="${dim}">${rects(cells, `fill="${K.rice}"`)}${rects(cells, 'fill="url(#grain)"')}
+    <path d="${edges(cells)}" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+    <path d="${edges(cells)}" stroke="#DED4C2" stroke-width="1.5" stroke-linecap="round" transform="translate(0 3.4)" opacity=".7"/></g>`;
+}
+function tint(cells, color, op) { return rects(cells, `fill="${color}" fill-opacity="${op}"`); }
+
+/* ---------- Thẻ (cùng hình với bộ component trên Figma) ---------- */
+const GRID = '<g stroke="#D9C6AD" stroke-width="1">' + [2,14,26,38,50].map(v => `<line x1="${v}" y1="2" x2="${v}" y2="50"/><line x1="2" y1="${v}" x2="50" y2="${v}"/>`).join('') + '</g>';
+const ln = (d, c) => `<path d="${d}" stroke="${c}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`;
+const G = '#2F9E44';
+const CARD = {
+  'Khuôn 2×2': ['#FFE6C2', true, false, GRID + '<rect x="14" y="14" width="24" height="24" fill="#F0A050" fill-opacity=".45"/>' + ln('M14 14 H38 V38 H14 Z', '#E07B1F')],
+  'Thẳng 2': ['#FFF4E2', false, true, GRID + ln('M14 26 H38', '#D6332A')],
+  'Xoay': ['#DCF3D6', false, true, `<path d="M38 26 A12 12 0 1 1 33.5 16.6" stroke="${G}" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M28 10 L36 16 L28 21" stroke="${G}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>`],
+};
+function card(x, y, name, op = 1) {
+  const [bg, dashed, rot, art] = CARD[name], fn = bg === '#DCF3D6', edge = fn ? '#2F6B2A' : K.ink;
+  return `<g opacity="${op}"><rect x="${x}" y="${y + 4}" width="76" height="100" rx="14" fill="${edge}"/>
+    <rect x="${x}" y="${y}" width="76" height="100" rx="14" fill="${bg}" stroke="${edge}" stroke-width="3" ${dashed ? 'stroke-dasharray="8 5"' : ''}/>
+    <g transform="translate(${x + 12} ${y + 10})">${art}</g>
+    <text x="${x + 38}" y="${y + 84}" text-anchor="middle" font-size="11.5" font-weight="800" fill="${K.ink}">${name}</text>
+    ${rot ? `<g transform="translate(${x + 55} ${y + 4})"><circle cx="9" cy="9" r="8" fill="#fff" stroke="#8A6A55" stroke-width="1.5"/><path d="M12.5 9 A3.5 3.5 0 1 1 11 6.2" stroke="#8A6A55" stroke-width="1.6" stroke-linecap="round" fill="none"/><path d="M9.6 4.6 L11.4 6.3 L9.5 7.9" stroke="#8A6A55" stroke-width="1.6" stroke-linecap="round" fill="none"/></g>` : ''}</g>`;
+}
+const HAND_Y = BY + BH + 8;
+function handRow(cards) {
+  let s = woodBtn(14, HAND_Y + 30, ICON.undo);
+  s += `<rect x="76" y="${HAND_Y}" width="300" height="116" rx="22" fill="${K.ink}" fill-opacity=".16"/>`;
+  const n = cards.length, gap = 12, total = n * 76 + (n - 1) * gap, x0 = 76 + (300 - total) / 2;
+  cards.forEach(([name, op], i) => s += card(x0 + i * (76 + gap), HAND_Y + 8, name, op));
+  return s;
+}
+function boosters() {
+  const y = HAND_Y + 145, xs = [113, 195, 277];
+  const circle = (x, fill) => `<circle cx="${x}" cy="${y + 3}" r="25" fill="${K.ink}"/><circle cx="${x}" cy="${y}" r="25" fill="${fill}" stroke="${K.ink}" stroke-width="3.5"/><ellipse cx="${x - 8}" cy="${y - 13}" rx="9" ry="4" fill="#fff" opacity=".35"/>`;
+  const badge = (x, inner, color) => `<g><circle cx="${x + 20}" cy="${y - 19}" r="11" fill="${color}" stroke="${K.ink}" stroke-width="2.5"/>${inner}</g>`;
+  let s = '';
+  // Booster 1: gợi ý, xem quảng cáo để dùng
+  s += circle(xs[0], K.yellow) + `<g transform="translate(${xs[0] - 12} ${y - 16})"><path d="M12 2 a10 10 0 0 0 -6 18 v4 h12 v-4 a10 10 0 0 0 -6 -18z" fill="#FFF7D6" stroke="${K.ink}" stroke-width="2.6" stroke-linejoin="round"/><path d="M8 28 h8" stroke="${K.ink}" stroke-width="2.6" stroke-linecap="round"/><path d="M12 12 v6" stroke="#E0A020" stroke-width="2.6" stroke-linecap="round"/></g>`
+    + badge(xs[0], `<path d="M${xs[0] + 17} ${y - 24} l7 5 l-7 5z" fill="#fff"/>`, '#4A8FE0');
+  // Booster 2: có sẵn 2 lượt
+  s += circle(xs[1], K.yellow) + `<path d="M${xs[1]} ${y - 14} l4 9 l10 1 l-7.5 6.5 l2.4 9.8 l-8.9 -5.3 l-8.9 5.3 l2.4 -9.8 l-7.5 -6.5 l10 -1z" fill="${K.cream}" stroke="${K.ink}" stroke-width="2.4" stroke-linejoin="round"/>`
+    + badge(xs[1], `<text x="${xs[1] + 20}" y="${y - 14.5}" text-anchor="middle" font-size="13" font-weight="900" fill="#fff">2</text>`, K.red);
+  // Booster 3: khoá
+  s += circle(xs[2], '#9E8C80') + `<g transform="translate(${xs[2] - 11} ${y - 14})"><path d="M5 11 V7 a6 6 0 0 1 12 0 V11" stroke="${K.cream}" stroke-width="3.2" stroke-linecap="round" fill="none"/><rect x="1" y="11" width="20" height="14" rx="4" fill="${K.cream}" stroke="${K.ink}" stroke-width="2"/></g>`;
+  [['Gợi ý', xs[0]], ['Booster 2', xs[1]], ['Lv 15', xs[2]]].forEach(([t, x]) => s += `<text x="${x}" y="${y + 40}" text-anchor="middle" font-size="12" font-weight="800" fill="${K.cream}" stroke="${K.ink}" stroke-width="3" paint-order="stroke">${t}</text>`);
+  return s;
+}
+function banner() {
+  return `<rect x="0" y="${H - 56}" width="${W}" height="56" fill="#F3F1EE"/><rect x="35" y="${H - 53}" width="320" height="50" rx="4" fill="none" stroke="#9a9a9a" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="${W / 2}" y="${H - 23}" text-anchor="middle" font-size="12" font-weight="800" fill="#8a8a8a">Banner quảng cáo 320×50</text>`;
+}
+function handPointer(x, y) {
+  return `<g transform="translate(${x - 18} ${y - 2})" filter="url(#soft)"><path d="M14 6 a4 4 0 0 1 8 0 V24 l1 -2 a4 4 0 0 1 7.5 1.5 V26 a4 4 0 0 1 7.5 1.5 V30 a4 4 0 0 1 7 2 V42 c0 10 -7 16 -16 16 h-4 c-6 0 -10 -3 -13 -8 L5 38 a4 4 0 0 1 6.5 -4.5 L14 37 Z" fill="#fff" stroke="${K.ink}" stroke-width="3" stroke-linejoin="round"/><path d="M22 26 V34 M30 28 V35 M38 32 V37" stroke="#C9BBA8" stroke-width="2" stroke-linecap="round"/></g>`;
+}
+
+/* ======================= Trạng thái ======================= */
+const RICE0 = R(4, 2, 1, 7), LEFT = [[1,7],[1,8]], SQ = R(2, 2, 2, 7), RIGHT = [[4,7],[4,8]];
+const SQ_IN = [[2,1],[3,1],[2,2],[3,2]];
+const HAND3 = [['Khuôn 2×2'], ['Thẳng 2'], ['Xoay']];
+const STATES = {
+  'Màn dạy': { cards: 3, pieces: [RICE0], hand: HAND3, over: () => {
+    const x1 = 76 + (300 - 252) / 2 + 38, y1 = HAND_Y + 6, x2 = cx(3), y2 = cy(8);
+    return `<text x="${BX + BW / 2}" y="${cy(5.8)}" text-anchor="middle" font-size="23" font-weight="900" fill="${K.cream}" stroke="${K.ink}" stroke-width="7" paint-order="stroke">Kéo thẻ Khuôn lên cơm!</text>
+      <path d="M${x1} ${y1} Q${x1 - 40} ${(y1 + y2) / 2} ${x2} ${y2 + 10}" stroke="#fff" stroke-width="5" stroke-dasharray="2 12" stroke-linecap="round" fill="none"/>
+      ${handPointer(x2, y2)}`; } },
+  'Mặc định': { cards: 3, pieces: [RICE0], hand: HAND3 },
+  'Kéo thẻ cắt': { cards: 3, pieces: [RICE0], hand: [['Khuôn 2×2', .3], ['Thẳng 2'], ['Xoay']], over: () =>
+    tint(LEFT, '#508CE6', .42) + tint(SQ, '#F06E3C', .45) + tint(RIGHT, '#5AB464', .42) +
+    `<path d="M${cx(2)} ${cy(7)} H${cx(4)} V${cy(9)} H${cx(2)} Z" stroke="#D6332A" stroke-width="6" stroke-linejoin="round" fill="none"/>
+     <circle cx="${cx(3)}" cy="${cy(9) + 44}" r="23" fill="#fff" fill-opacity=".35" stroke="#fff" stroke-width="3"/>` },
+  'Kéo thẻ chức năng': { cards: 2, pieces: [SQ_IN, LEFT, RIGHT], hand: [['Thẳng 2'], ['Xoay', .3]], over: () =>
+    tint(LEFT, '#5AB464', .42) + `<rect x="${cx(1)}" y="${cy(8)}" width="${2 * C}" height="${C}" rx="4" fill="none" stroke="#2F9E44" stroke-width="4" stroke-dasharray="9 7"/>
+     <circle cx="${cx(1.5)}" cy="${cy(7.5)}" r="8" fill="#2F9E44" stroke="#fff" stroke-width="3"/>` },
+  'Hoàn thành': { cards: 1, pieces: [SQ_IN, [[1,2],[1,3]], [[4,2],[4,3]]], hand: [['Thẳng 2']], top: () => {
+    const bx = 45, bw = 300, bh = 270, by = 372;
+    return `<rect width="${W}" height="${H}" fill="#000" fill-opacity=".32"/>
+      <rect x="${bx}" y="${by + 5}" width="${bw}" height="${bh}" rx="26" fill="${K.ink}"/>
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="26" fill="${K.cream}" stroke="${K.ink}" stroke-width="4"/>
+      ${egg(W / 2 - 44, by + 18, 1.45)}
+      <text x="${W / 2}" y="${by + 128}" text-anchor="middle" font-size="30" font-weight="900" fill="${K.ink}">Hoàn thành!</text>
+      <text x="${W / 2}" y="${by + 156}" text-anchor="middle" font-size="14" font-weight="700" fill="${K.ink}" opacity=".7">Level 9 xong.</text>
+      <rect x="${W / 2 - 76}" y="${by + 184}" width="152" height="56" rx="18" fill="${K.ink}"/>
+      <rect x="${W / 2 - 76}" y="${by + 180}" width="152" height="56" rx="18" fill="${K.green}" stroke="${K.ink}" stroke-width="3.5"/>
+      <text x="${W / 2}" y="${by + 216}" text-anchor="middle" font-size="22" font-weight="900" fill="${K.cream}">Tiếp tục</text>
+      ${banner()}`; } },
+};
+function render(name) {
+  const st = STATES[name];
+  const body = [
+    wallAndShelf(), plaque(9, st.cards), woodBtn(16, 30, ICON.gear), noAds(42, 106),
+    shelfMascot(), shelfFront(),
+    boardBase(), tin(TRAY), sausage([[2,3],[3,3]]), ...st.pieces.map(p => rice(p)),
+    st.over ? st.over() : '', handRow(st.hand), boosters(), banner(), st.top ? st.top() : '',
+  ].join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Nunito, 'Segoe UI', sans-serif">
+    <defs>
+      <pattern id="grain" width="16" height="14" patternUnits="userSpaceOnUse">
+        <ellipse cx="3" cy="3" rx="2.6" ry="1.6" fill="${K.grain}" transform="rotate(25 3 3)"/><ellipse cx="11" cy="5" rx="2.4" ry="1.5" fill="${K.grain}" transform="rotate(-30 11 5)"/>
+        <ellipse cx="6" cy="10" rx="2.6" ry="1.5" fill="${K.grain}" transform="rotate(60 6 10)"/><ellipse cx="14" cy="12" rx="2.2" ry="1.4" fill="${K.grain}" transform="rotate(10 14 12)"/>
+        <ellipse cx="8.5" cy="6.5" rx="1.6" ry="1" fill="#fff"/>
+      </pattern>
+      <filter id="soft" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#000" flood-opacity=".25"/></filter>
+    </defs>${body}</svg>`;
+}
+
+/* ======================= Giao diện trang ======================= */
+let cur = 'Mặc định';
+const tabs = document.getElementById('tabs'), phone = document.getElementById('phone');
+Object.keys(STATES).forEach(n => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => show(n); tabs.appendChild(b); });
+function show(n) { cur = n; phone.innerHTML = render(n); [...tabs.children].forEach(b => b.classList.toggle('on', b.textContent === n)); }
+document.getElementById('dl').onclick = () => {
+  const blob = new Blob([render(cur)], { type: 'image/svg+xml' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = `the-cat-ui-v3-${cur.replace(/\s+/g, '-')}.svg`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+/* ?bare=Tên trạng thái: chỉ hiện màn hình 390×844 (dùng để chụp ảnh) */
+const bare = new URLSearchParams(location.search).get('bare');
+if (bare && STATES[bare]) { document.body.innerHTML = render(bare); document.body.style.background = '#000'; }
+else show(cur);
+</script>
+</body>
+</html>
