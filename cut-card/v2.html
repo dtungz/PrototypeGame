@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Thẻ Cắt · Prototype</title>
+<style>
+  :root {
+    --bg: #b7614b; --bg2: #a5513d; --plank: #8c4a33; --plank-hi: #c98a5e;
+    --board: #c98d63; --board-in: #d39a6f; --board-line: #b97d55;
+    --tray: #e8485a; --tray-in: #f05a6a; --tray-frame: #4a2a24;
+    --rice: #fbf8f1; --rice-edge: #d9d2c4; --ink: #3a2219; --cream: #fff4e2;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI", system-ui, sans-serif; overscroll-behavior: none; }
+  body { display: flex; justify-content: center;
+    background: repeating-linear-gradient(0deg, var(--bg) 0 46px, var(--bg2) 46px 48px); }
+  .app { width: 100%; max-width: 460px; height: 100%; display: flex; flex-direction: column; padding: 8px 10px 10px; gap: 6px; }
+  header { display: flex; align-items: center; gap: 8px; }
+  .btn { width: 48px; height: 48px; border-radius: 14px; border: 3px solid var(--tray-frame); background: var(--plank-hi);
+    color: var(--cream); font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: 0 3px 0 var(--tray-frame); text-decoration: none; flex: none; padding: 0; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--tray-frame); }
+  .plaque { flex: 1; background: var(--plank); border: 3px solid var(--tray-frame); border-radius: 14px; padding: 4px 6px;
+    display: flex; align-items: center; justify-content: space-between; color: var(--cream); box-shadow: 0 3px 0 var(--tray-frame); }
+  .plaque button { background: none; border: 0; color: var(--cream); font-size: 1.2rem; cursor: pointer; padding: 4px 8px; }
+  .plaque .mid { text-align: center; line-height: 1.15; }
+  .plaque .lv { font-weight: 800; font-size: 1.05rem; }
+  .plaque .sub { font-size: .8rem; opacity: .9; }
+  .stars { letter-spacing: 2px; font-size: .95rem; }
+  .hint { color: var(--cream); font-size: .86rem; line-height: 1.25; min-height: 2.5em; text-align: center; padding: 0 4px;
+    text-shadow: 0 1px 0 rgba(0,0,0,.25); }
+  .stage { flex: 1; min-height: 0; display: flex; justify-content: center; align-items: center; }
+  svg#board { width: 100%; height: 100%; touch-action: none; user-select: none; display: block; }
+  .bottom { display: flex; align-items: center; gap: 6px; }
+  .hand { flex: 1; display: flex; gap: 6px; justify-content: center; min-height: 92px; touch-action: none; align-items: center; }
+  .card { width: 70px; height: 90px; border-radius: 12px; background: var(--cream); border: 3px solid var(--tray-frame);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
+    touch-action: none; cursor: grab; transition: opacity .15s; box-shadow: 0 3px 0 var(--tray-frame); }
+  .card[data-fam="mold"] { background: #ffe9c7; border-style: dashed; }
+  .card[data-fam="diag"] { background: #ece3ff; }
+  .card svg { width: 52px; height: 52px; }
+  .card .nm { font-size: .68rem; font-weight: 700; color: var(--ink); }
+  .card .rot { position: absolute; top: 1px; right: 4px; font-size: .78rem; color: #8a6a55; }
+  .card.dragging { opacity: .25; }
+  .card.shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .empty { color: var(--cream); font-size: .82rem; text-align: center; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; padding: 16px; }
+  .overlay.show { display: flex; }
+  .box { background: var(--cream); border: 4px solid var(--tray-frame); border-radius: 18px; padding: 20px; max-width: 320px; width: 100%; text-align: center; }
+  .box h2 { margin: 0 0 4px; }
+  .box .big { font-size: 1.8rem; letter-spacing: 4px; }
+  .box p { margin: 4px 0; color: #6d5446; font-size: .9rem; }
+  .box button { margin-top: 12px; padding: 10px 22px; border-radius: 12px; border: 3px solid var(--tray-frame); background: #6cbf5a;
+    color: #fff; font: inherit; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 var(--tray-frame); }
+  .v1 { display: block; text-align: center; font-size: .7rem; color: var(--cream); opacity: .7; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <a class="btn" href="../" title="Trang chủ">⌂</a>
+    <div class="plaque">
+      <button id="prevLv">◀</button>
+      <div class="mid">
+        <div class="lv" id="lvName">Lv.1</div>
+        <div class="sub"><span id="cardsLeft">🃏 ×0</span> · <span class="stars" id="stars">★★★</span></div>
+      </div>
+      <button id="nextLv">▶</button>
+    </div>
+    <button class="btn" id="resetBtn" title="Chơi lại">⟲</button>
+  </header>
+  <div class="hint" id="hint"></div>
+  <div class="stage"><svg id="board"></svg></div>
+  <div class="bottom">
+    <button class="btn" id="undoBtn" title="Hoàn tác">↶</button>
+    <div class="hand" id="hand"></div>
+  </div>
+  <a class="v1" href="v1.html">bản v1: so sánh cạnh / ô</a>
+</div>
+<div class="overlay" id="win">
+  <div class="box">
+    <h2>Hoàn thành!</h2>
+    <div class="big" id="winStars">★★★</div>
+    <p id="winInfo"></p>
+    <button id="nextBtn">Màn tiếp</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   Mô hình: mỗi ô chia thành 4 tam giác  t = 0 trên, 1 phải, 2 dưới, 3 trái.
+   Miếng cơm và khay đều là tập tam giác [x, y, t].
+   Cạnh cắt (giữa các giao điểm lưới):
+     h x,y  cạnh ngang trên ô (x,y)      v x,y  cạnh dọc trái ô (x,y)
+     d x,y  chéo "\" trong ô (x,y)       a x,y  chéo "/" trong ô (x,y)
+   Mọi thẻ là một đường gấp khúc trên giao điểm lưới (đoạn ngang, dọc, hoặc 45°).
+   Đường khép kín = thẻ khuôn.
+   ========================================================================= */
+const T4 = [0, 1, 2, 3];
+const R = (w, h) => { const c = []; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) c.push([x, y]); return c; };
+const full = cells => cells.flatMap(([x, y]) => T4.map(t => [x, y, t]));
+const TRI_UR = [...full([[1, 0]]), [0, 0, 0], [0, 0, 1], [1, 1, 0], [1, 1, 1]];   // tam giác góc trên-phải 2×2
+const TRI_LL = [...full([[0, 1]]), [0, 0, 2], [0, 0, 3], [1, 1, 2], [1, 1, 3]];   // tam giác góc dưới-trái 2×2
+const HALF_NW = [[0, 0, 0], [0, 0, 3]];                                           // nửa ô, góc trên-trái
+const HALF_SE = [[0, 0, 1], [0, 0, 2]];
+
+const LINE  = n => ({ fam: 'line', name: `Thẳng ${n}`, polys: [[[0, 0], [n, 0]]] });
+const LINEV = n => ({ fam: 'line', name: `Thẳng ${n}`, polys: [[[0, 0], [0, n]]] });
+const LCUT  = { fam: 'line', name: 'Chữ L', polys: [[[2, 0], [2, 1], [0, 1]]] };
+const MOLD1 = { fam: 'mold', name: 'Khuôn 1', polys: [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]] };
+const DIAG  = n => ({ fam: 'diag', name: `Chéo ${n}`, polys: [[[0, 0], [n, n]]] });
+const DIAGA = n => ({ fam: 'diag', name: `Chéo ${n}`, polys: [[[n, 0], [0, n]]] });
+
+/* Toạ độ trên thớt 7×10. rice/trays: { s: tập tam giác, at: [x, y] } */
+const LEVELS = [
+  { hint: 'Kéo thẻ lên miếng cơm để cắt. Kéo miếng cơm vào khay.',
+    rice: [{ s: full(R(4, 2)), at: [1, 6] }], trays: [{ s: full(R(2, 2)), at: [1, 1] }, { s: full(R(2, 2)), at: [4, 1] }],
+    cards: [LINEV(2)] },
+  { hint: 'Chạm vào thẻ (không kéo) để xoay 90°. Khay cũng kéo đi được.',
+    rice: [{ s: full(R(3, 3)), at: [2, 6] }], trays: [{ s: full(R(2, 2)), at: [0, 1] }, { s: full(R(1, 2)), at: [3, 1] }, { s: full(R(3, 1)), at: [4, 3] }],
+    cards: [LINE(3), LINE(2)] },
+  { hint: 'Thẻ khuôn (viền nét đứt) lấy ra đúng phần bên trong.',
+    rice: [{ s: full(R(3, 3)), at: [2, 6] }], trays: [{ s: full(R(1, 1)), at: [0, 1] }, { s: full(R(3, 1)), at: [2, 1] }, { s: full([[0, 0], [2, 0], [0, 1], [1, 1], [2, 1]]), at: [3, 3] }],
+    cards: [MOLD1, LINE(3)] },
+  { hint: 'Đường chữ L cắt được góc. Thứ tự dùng thẻ quan trọng.',
+    rice: [{ s: full(R(3, 3)), at: [2, 6] }], trays: [{ s: full(R(2, 1)), at: [0, 1] }, { s: full(R(1, 3)), at: [3, 1] }, { s: full(R(2, 2)), at: [5, 1] }],
+    cards: [LCUT, LINE(2)] },
+  { hint: 'Thẻ chéo (màu tím) cắt xéo qua ô: ra cơm nắm tam giác!',
+    rice: [{ s: full(R(2, 2)), at: [2, 6] }], trays: [{ s: TRI_UR, at: [1, 1] }, { s: TRI_LL, at: [4, 1] }],
+    cards: [DIAG(2)] },
+  { hint: 'Cắt thẳng trước hay chéo trước?',
+    rice: [{ s: full(R(3, 2)), at: [2, 6] }], trays: [{ s: full(R(1, 2)), at: [0, 1] }, { s: TRI_UR, at: [2, 1] }, { s: TRI_LL, at: [5, 1] }],
+    cards: [DIAG(2), LINE(2)] },
+  { hint: 'Chéo 1 chỉ cắt xéo một ô. Xoay để đổi hướng chéo.',
+    rice: [{ s: full(R(3, 1)), at: [2, 7] }], trays: [{ s: HALF_NW, at: [1, 2] }, { s: [...HALF_SE, ...full([[1, 0]])], at: [3, 2] }, { s: full(R(1, 1)), at: [6, 2] }],
+    cards: [DIAGA(1), LINEV(1)] },
+];
+
+/* ======================= Trạng thái ======================= */
+const COLS = 7, ROWS = 10;
+let levelIdx = 0, foods = [], trays = [], hand = [], history = [], nextId = 1;
+let stats = { bad: 0, undo: 0, start: 0 };
+let drag = null, lastCut = null, won = false;
+const key3 = (x, y, t) => x + ',' + y + ',' + t;
+const svg = document.getElementById('board'), NS = 'http://www.w3.org/2000/svg';
+const el = (tag, a = {}, p) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; };
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function loadLevel(i) {
+  levelIdx = (i + LEVELS.length) % LEVELS.length;
+  const L = LEVELS[levelIdx];
+  nextId = 1;
+  foods = L.rice.map(r => ({ id: nextId++, tris: r.s.map(([x, y, t]) => [x + r.at[0], y + r.at[1], t]) }));
+  trays = L.trays.map((r, j) => ({ id: 100 + j, tris: r.s.map(([x, y, t]) => [x + r.at[0], y + r.at[1], t]) }));
+  hand = L.cards.map(c => ({ def: c, rot: 0, used: false }));
+  history = []; stats = { bad: 0, undo: 0, start: performance.now() }; won = false;
+  document.getElementById('lvName').textContent = `Lv.1-${levelIdx + 1}`;
+  document.getElementById('hint').textContent = L.hint;
+  document.getElementById('win').classList.remove('show');
+  render(); renderHand();
+}
+
+/* ======================= Hình học ======================= */
+function cardGeom(card) {
+  let polys = card.def.polys.map(pl => pl.map(p => p.slice()));
+  for (let r = 0; r < card.rot; r++) polys = polys.map(pl => pl.map(([x, y]) => [-y, x]));
+  const all = polys.flat(), mx = Math.min(...all.map(p => p[0])), my = Math.min(...all.map(p => p[1]));
+  polys = polys.map(pl => pl.map(([x, y]) => [x - mx, y - my]));
+  const f = polys.flat();
+  return { polys, w: Math.max(...f.map(p => p[0])), h: Math.max(...f.map(p => p[1])) };
+}
+function unitSegments(polys, ox, oy) {
+  const segs = [];
+  polys.forEach(pl => { for (let i = 0; i < pl.length - 1; i++) {
+    let [x1, y1] = pl[i]; const [x2, y2] = pl[i + 1], dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+    while (x1 !== x2 || y1 !== y2) { segs.push([x1 + ox, y1 + oy, x1 + dx + ox, y1 + dy + oy]); x1 += dx; y1 += dy; }
+  } });
+  return segs;
+}
+function segKeys(segs) {
+  const s = new Set();
+  segs.forEach(([x1, y1, x2, y2]) => {
+    const x = Math.min(x1, x2), y = Math.min(y1, y2);
+    if (y1 === y2) s.add('h' + x + ',' + y);
+    else if (x1 === x2) s.add('v' + x + ',' + y);
+    else s.add(((x2 - x1) * (y2 - y1) > 0 ? 'd' : 'a') + x + ',' + y);
+  });
+  return s;
+}
+function neighbors(x, y, t) {   // [nx, ny, nt, khoá cạnh chặn]
+  const inCell = [[x, y, (t + 1) % 4, (t % 2 === 0 ? 'a' : 'd') + x + ',' + y],
+                  [x, y, (t + 3) % 4, (t % 2 === 0 ? 'd' : 'a') + x + ',' + y]];
+  const across = [[x, y - 1, 2, 'h' + x + ',' + y], [x + 1, y, 3, 'v' + (x + 1) + ',' + y],
+                  [x, y + 1, 0, 'h' + x + ',' + (y + 1)], [x - 1, y, 1, 'v' + x + ',' + y]][t];
+  return [...inCell, across];
+}
+function components(tris, blocked) {
+  const set = new Set(tris.map(q => key3(...q))), seen = new Set(), out = [];
+  for (const q of tris) {
+    const k0 = key3(...q); if (seen.has(k0)) continue;
+    const comp = [], st = [q]; seen.add(k0);
+    while (st.length) {
+      const c = st.pop(); comp.push(c);
+      for (const [nx, ny, nt, ek] of neighbors(...c)) {
+        const nk = key3(nx, ny, nt);
+        if (set.has(nk) && !seen.has(nk) && !(blocked && blocked.has(ek))) { seen.add(nk); st.push([nx, ny, nt]); }
+      }
+    }
+    out.push(comp);
+  }
+  return out;
+}
+function evaluateCut(card, ox, oy) {
+  const g = cardGeom(card), segs = unitSegments(g.polys, ox, oy), ek = segKeys(segs), splits = [];
+  foods.forEach(f => { const parts = components(f.tris, ek); if (parts.length > 1) splits.push({ food: f, parts }); });
+  return { valid: splits.length > 0, splits, segs, closed: card.def.fam === 'mold' };
+}
+function applyCut(res) {
+  pushHistory();
+  res.splits.forEach(({ food, parts }) => {
+    const i = foods.indexOf(food);
+    foods.splice(i, 1, ...parts.map((tris, j) => j === 0 ? { ...food, tris } : { id: nextId++, tris }));
+  });
+}
+function triAt(wx, wy) {
+  const x = Math.floor(wx), y = Math.floor(wy), fx = wx - x, fy = wy - y;
+  const t = fy < fx ? (fy < 1 - fx ? 0 : 1) : (fy < 1 - fx ? 3 : 2);
+  return [x, y, t];
+}
+const has = (obj, q) => obj.tris.some(c => c[0] === q[0] && c[1] === q[1] && c[2] === q[2]);
+const inBoard = ([x, y]) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
+const shift = (tris, dx, dy) => tris.map(([x, y, t]) => [x + dx, y + dy, t]);
+const keySet = list => { const s = new Set(); list.forEach(o => o.tris.forEach(q => s.add(key3(...q)))); return s; };
+
+/* Miếng cơm: nằm trong thớt, không chồng miếng khác (được nằm trên khay). */
+function canPlaceFood(food, tris) {
+  const occ = keySet(foods.filter(f => f !== food));
+  return tris.every(q => inBoard(q) && !occ.has(key3(...q)));
+}
+/* Khay: nằm trong thớt, không chồng khay khác, không đè lên cơm (cơm nằm gọn trong khay thì đi theo khay). */
+function foodsInside(tray) {
+  const ts = new Set(tray.tris.map(q => key3(...q)));
+  return foods.filter(f => f.tris.every(q => ts.has(key3(...q))));
+}
+function canPlaceTray(tray, dx, dy) {
+  const moved = shift(tray.tris, dx, dy), carried = foodsInside(tray);
+  if (!moved.every(inBoard)) return false;
+  const otherTrays = keySet(trays.filter(t => t !== tray)), otherFood = keySet(foods.filter(f => !carried.includes(f)));
+  return moved.every(q => !otherTrays.has(key3(...q)) && !otherFood.has(key3(...q)));
+}
+function checkWin() {
+  const occ = keySet(foods);
+  if (won || !trays.every(t => t.tris.every(q => occ.has(key3(...q))))) return;
+  won = true;
+  const s = starCount(), sec = ((performance.now() - stats.start) / 1000).toFixed(1);
+  document.getElementById('winStars').textContent = '★'.repeat(s) + '☆'.repeat(3 - s);
+  document.getElementById('winInfo').textContent = `${sec}s · thả hỏng ${stats.bad} · hoàn tác ${stats.undo}`;
+  document.getElementById('nextBtn').textContent = levelIdx < LEVELS.length - 1 ? 'Màn tiếp' : 'Về màn 1';
+  setTimeout(() => { document.getElementById('win').classList.add('show'); sfx('win'); }, 300);
+}
+const starCount = () => Math.max(1, 3 - stats.bad - stats.undo);
+
+/* ======================= Lịch sử ======================= */
+function pushHistory() { history.push(clone({ foods, trays, hand: hand.map(h => ({ rot: h.rot, used: h.used })) })); }
+function undo() {
+  const s = history.pop(); if (!s) return;
+  foods = s.foods; trays = s.trays; s.hand.forEach((h, i) => Object.assign(hand[i], h));
+  stats.undo++; render(); renderHand();
+}
+
+/* ======================= Vẽ ======================= */
+function triPts(x, y, t) {
+  const c = [x + .5, y + .5], P = [[x, y], [x + 1, y], [x + 1, y + 1], [x, y + 1]];
+  return [P[t], P[(t + 1) % 4], c];
+}
+const ptsStr = pts => pts.map(p => p.join(',')).join(' ');
+/* Viền ngoài của một tập tam giác: cạnh nào không có tam giác cùng tập bên kia thì vẽ. */
+function boundary(tris) {
+  const s = new Set(tris.map(q => key3(...q))), out = [];
+  tris.forEach(([x, y, t]) => {
+    const [a, b, c] = triPts(x, y, t);
+    for (const [nx, ny, nt] of neighbors(x, y, t)) {
+      if (s.has(key3(nx, ny, nt))) continue;
+      if (nx === x && ny === y) out.push(nt === (t + 1) % 4 ? [b, c] : [a, c]);
+      else out.push([a, b]);
+    }
+  });
+  return out;
+}
+function drawSet(parent, tris, fill, edge, w) {
+  const g = el('g', {}, parent);
+  tris.forEach(q => el('polygon', { points: ptsStr(triPts(...q)), fill, stroke: fill, 'stroke-width': 0.06, 'stroke-linejoin': 'round' }, g));
+  boundary(tris).forEach(([p, q]) => el('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1], stroke: edge, 'stroke-width': w, 'stroke-linecap': 'round' }, g));
+  return g;
+}
+function drawTray(parent, tr, dx = 0, dy = 0) {
+  const g = el('g', { transform: `translate(${dx} ${dy})` }, parent);
+  drawSet(g, tr.tris, 'var(--tray)', 'var(--tray-frame)', 0.24);
+  const count = {};
+  tr.tris.forEach(([x, y]) => { const k = x + ',' + y; count[k] = (count[k] || 0) + 1; });
+  Object.keys(count).forEach(k => { if (count[k] < 4) return;   // ô đủ 4 tam giác mới vẽ ô lõm
+    const [x, y] = k.split(',').map(Number);
+    el('rect', { x: x + .12, y: y + .12, width: .76, height: .76, rx: .14, fill: 'var(--tray-in)', opacity: .55 }, g); });
+  return g;
+}
+function drawFood(parent, f, dx = 0, dy = 0) {
+  const g = el('g', { transform: `translate(${dx} ${dy})` }, parent);
+  drawSet(g, f.tris, 'var(--rice)', 'var(--rice-edge)', 0.07);
+  // hạt cơm
+  f.tris.forEach(([x, y, t], i) => { if ((x * 7 + y * 3 + t) % 2) return; const [a, b, c] = triPts(x, y, t);
+    el('ellipse', { cx: (a[0] + b[0] + c[0]) / 3, cy: (a[1] + b[1] + c[1]) / 3, rx: .07, ry: .045, fill: '#e9e3d6',
+      transform: `rotate(${(i * 47) % 180} ${(a[0] + b[0] + c[0]) / 3} ${(a[1] + b[1] + c[1]) / 3})` }, g); });
+  return g;
+}
+const TINT = ['rgba(240,110,60,.45)', 'rgba(80,140,230,.40)', 'rgba(90,180,100,.40)', 'rgba(210,170,40,.45)'];
+function render() {
+  svg.innerHTML = '';
+  const pad = .35;
+  svg.setAttribute('viewBox', `${-pad} ${-pad} ${COLS + pad * 2} ${ROWS + pad * 2}`);
+  el('rect', { x: -.3, y: -.3, width: COLS + .6, height: ROWS + .6, rx: .45, fill: 'var(--board)', stroke: 'var(--tray-frame)', 'stroke-width': .08 }, svg);
+  el('rect', { x: 0, y: 0, width: COLS, height: ROWS, rx: .2, fill: 'var(--board-in)' }, svg);
+  for (let x = 1; x < COLS; x++) el('line', { x1: x, y1: 0, x2: x, y2: ROWS, stroke: 'var(--board-line)', 'stroke-width': .025 }, svg);
+  for (let y = 1; y < ROWS; y++) el('line', { x1: 0, y1: y, x2: COLS, y2: y, stroke: 'var(--board-line)', 'stroke-width': .025 }, svg);
+
+  const moving = drag && drag.moved ? drag : null;
+  const carried = moving && moving.type === 'tray' ? foodsInside(moving.tray) : [];
+  trays.forEach(t => { if (!(moving && moving.tray === t)) drawTray(svg, t); });
+  foods.forEach(f => { if (!(moving && (moving.food === f || carried.includes(f)))) drawFood(svg, f); });
+
+  if (moving && moving.type === 'card' && moving.res) {
+    const r = moving.res;
+    r.splits.forEach(({ parts }) => parts.forEach((tris, i) => tris.forEach(q =>
+      el('polygon', { points: ptsStr(triPts(...q)), fill: TINT[i % TINT.length] }, svg))));
+    r.segs.forEach(([x1, y1, x2, y2]) => el('line', { x1, y1, x2, y2, stroke: r.valid ? '#d6332a' : '#7d6f66', 'stroke-width': .14,
+      'stroke-linecap': 'round', 'stroke-dasharray': r.valid ? '' : '.18 .12' }, svg));
+  }
+  if (moving && (moving.type === 'food' || moving.type === 'tray')) {
+    const dx = Math.round(moving.fx), dy = Math.round(moving.fy);
+    const ok = moving.type === 'food' ? canPlaceFood(moving.food, shift(moving.food.tris, dx, dy)) : canPlaceTray(moving.tray, dx, dy);
+    const ghostTris = moving.type === 'food' ? moving.food.tris : moving.tray.tris;
+    boundary(shift(ghostTris, dx, dy)).forEach(([p, q]) => el('line', { x1: p[0], y1: p[1], x2: q[0], y2: q[1],
+      stroke: ok ? '#3d9a4e' : '#d6332a', 'stroke-width': .1, 'stroke-dasharray': '.2 .12', 'stroke-linecap': 'round' }, svg));
+    const lift = el('g', { opacity: .95, filter: 'drop-shadow(0 .15px .1px rgba(0,0,0,.35))' }, svg);
+    if (moving.type === 'tray') { drawTray(lift, moving.tray, moving.fx, moving.fy); carried.forEach(f => drawFood(lift, f, moving.fx, moving.fy)); }
+    else drawFood(lift, moving.food, moving.fx, moving.fy);
+  }
+  if (lastCut) {
+    lastCut.forEach(([x1, y1, x2, y2]) => el('line', { x1, y1, x2, y2, stroke: '#fff', 'stroke-width': .16, 'stroke-linecap': 'round' }, svg)
+      .animate([{ opacity: 1 }, { opacity: 0 }], { duration: 380, fill: 'forwards' }));
+    lastCut = null;
+  }
+  const left = hand.filter(c => !c.used).length;
+  document.getElementById('cardsLeft').textContent = `🃏 ×${left}`;
+  const s = starCount();
+  document.getElementById('stars').textContent = '★'.repeat(s) + '☆'.repeat(3 - s);
+}
+
+/* ======================= Tay bài ======================= */
+const handEl = document.getElementById('hand');
+const FAM_COLOR = { line: '#d6332a', mold: '#d06a10', diag: '#7a4fd6' };
+function cardSVG(card) {
+  const g = cardGeom(card), s = document.createElementNS(NS, 'svg'), N = 3;
+  s.setAttribute('viewBox', `-.4 -.4 ${N + .8} ${N + .8}`);
+  for (let i = 0; i <= N; i++) {
+    el('line', { x1: i, y1: 0, x2: i, y2: N, stroke: '#d9c6ad', 'stroke-width': .05 }, s);
+    el('line', { x1: 0, y1: i, x2: N, y2: i, stroke: '#d9c6ad', 'stroke-width': .05 }, s);
+  }
+  const ox = Math.floor((N - g.w) / 2), oy = Math.floor((N - g.h) / 2), col = FAM_COLOR[card.def.fam];
+  g.polys.forEach(pl => {
+    const pts = pl.map(([x, y]) => `${x + ox},${y + oy}`).join(' ');
+    if (card.def.fam === 'mold') el('polygon', { points: pts, fill: 'rgba(240,160,80,.45)' }, s);
+    el('polyline', { points: pts, fill: 'none', stroke: col, 'stroke-width': .24, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, s);
+  });
+  return s;
+}
+function renderHand() {
+  handEl.innerHTML = '';
+  hand.forEach((c, i) => {
+    if (c.used) return;
+    const d = document.createElement('div');
+    d.className = 'card'; d.dataset.i = i; d.dataset.fam = c.def.fam;
+    d.appendChild(cardSVG(c));
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = c.def.name; d.appendChild(nm);
+    const r = document.createElement('div'); r.className = 'rot'; r.textContent = '↻'; d.appendChild(r);
+    d.addEventListener('pointerdown', e => cardDown(e, i, d));
+    handEl.appendChild(d);
+  });
+  if (!hand.some(c => !c.used)) {
+    const p = document.createElement('div'); p.className = 'empty';
+    p.textContent = 'Hết thẻ — xếp cơm vào khay, hoặc hoàn tác.'; handEl.appendChild(p);
+  }
+  render();
+}
+
+/* ======================= Điều khiển ======================= */
+function toWorld(e) {
+  const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  const w = pt.matrixTransform(svg.getScreenCTM().inverse()); return [w.x, w.y];
+}
+const tapPx = touch => touch ? 12 : 5;
+function cardDown(e, i, d) {
+  if (drag) return;
+  e.preventDefault(); try { d.setPointerCapture(e.pointerId); } catch (_) {}
+  drag = { type: 'card', i, d, sx: e.clientX, sy: e.clientY, moved: false, res: null, touch: e.pointerType === 'touch', pid: e.pointerId };
+}
+svg.addEventListener('pointerdown', e => {
+  if (drag) return;
+  const [wx, wy] = toWorld(e), q = triAt(wx, wy);
+  const f = foods.find(o => has(o, q));
+  let t = f ? null : trays.find(o => has(o, q));
+  if (!f && !t) {   // chạm vào viền khay (ngoài ô) cũng nắm được khay, kể cả khi khay đã đầy cơm
+    for (const [ox, oy] of [[.3, 0], [-.3, 0], [0, .3], [0, -.3], [.3, .3], [-.3, .3], [.3, -.3], [-.3, -.3]]) {
+      t = trays.find(o => has(o, triAt(wx + ox, wy + oy))); if (t) break;
+    }
+  }
+  if (!f && !t) return;
+  e.preventDefault(); try { svg.setPointerCapture(e.pointerId); } catch (_) {}
+  drag = { type: f ? 'food' : 'tray', food: f, tray: t, wx, wy, sx: e.clientX, sy: e.clientY, fx: 0, fy: 0, moved: false,
+           pid: e.pointerId, touch: e.pointerType === 'touch' };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < tapPx(drag.touch)) return;
+  drag.moved = true;
+  if (drag.type !== 'card') { const [wx, wy] = toWorld(e); drag.fx = wx - drag.wx; drag.fy = wy - drag.wy; render(); return; }
+  drag.d.classList.add('dragging');
+  const card = hand[drag.i], g = cardGeom(card);
+  let [wx, wy] = toWorld(e);
+  if (drag.touch) wy -= 1.3;   // đường cắt nổi lên trên ngón tay
+  const ox = Math.round(wx - g.w / 2), oy = Math.round(wy - g.h / 2);
+  if (!drag.res || drag.ox !== ox || drag.oy !== oy) { drag.ox = ox; drag.oy = oy; drag.res = evaluateCut(card, ox, oy); render(); }
+});
+function endDrag(e, cancelled) {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const dr = drag; drag = null;
+  if (dr.type === 'food' || dr.type === 'tray') {
+    const dx = Math.round(dr.fx), dy = Math.round(dr.fy);
+    if (!cancelled && dr.moved && (dx || dy)) {
+      if (dr.type === 'food' && canPlaceFood(dr.food, shift(dr.food.tris, dx, dy))) {
+        pushHistory(); dr.food.tris = shift(dr.food.tris, dx, dy); sfx('drop');
+      } else if (dr.type === 'tray' && canPlaceTray(dr.tray, dx, dy)) {
+        pushHistory(); foodsInside(dr.tray).forEach(f => f.tris = shift(f.tris, dx, dy)); dr.tray.tris = shift(dr.tray.tris, dx, dy); sfx('drop');
+      } else sfx('bad');
+    }
+    render(); checkWin(); return;
+  }
+  dr.d.classList.remove('dragging');
+  if (cancelled) { render(); return; }
+  if (!dr.moved) { pushHistory(); hand[dr.i].rot = (hand[dr.i].rot + 1) % 4; sfx('rot'); renderHand(); return; }
+  if (dr.res && dr.res.valid) {
+    applyCut(dr.res); hand[dr.i].used = true; lastCut = dr.res.segs; sfx('cut'); renderHand(); checkWin();
+  } else {
+    stats.bad++; renderHand(); sfx('bad');
+    const c = handEl.querySelector(`.card[data-i="${dr.i}"]`); if (c) c.classList.add('shake');
+  }
+}
+window.addEventListener('pointerup', e => endDrag(e, false));
+window.addEventListener('pointercancel', e => endDrag(e, true));
+
+/* ======================= Âm thanh ======================= */
+let ac = null;
+function sfx(kind) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ac.currentTime;
+    if (kind === 'cut') {
+      const len = .12, buf = ac.createBuffer(1, ac.sampleRate * len, ac.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+      const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = buf; f.type = 'bandpass'; f.frequency.value = 2400; g.gain.value = .6;
+      src.connect(f).connect(g).connect(ac.destination); src.start(t); return;
+    }
+    const o = ac.createOscillator(), g = ac.createGain();
+    const [fq, du] = ({ drop: [520, .06], rot: [700, .05], bad: [160, .15], win: [880, .3] })[kind] || [440, .05];
+    o.frequency.value = fq; o.type = kind === 'bad' ? 'square' : 'sine';
+    g.gain.setValueAtTime(.15, t); g.gain.exponentialRampToValueAtTime(.001, t + du);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + du);
+  } catch (_) {}
+}
+
+/* ======================= Khởi động ======================= */
+document.getElementById('prevLv').onclick = () => loadLevel(levelIdx - 1);
+document.getElementById('nextLv').onclick = () => loadLevel(levelIdx + 1);
+document.getElementById('resetBtn').onclick = () => loadLevel(levelIdx);
+document.getElementById('undoBtn').onclick = undo;
+document.getElementById('nextBtn').onclick = () => loadLevel(levelIdx + 1);
+window.addEventListener('resize', render);
+loadLevel(0);
+
+/* ======================= Solver (console: selfTest()) =======================
+   Thử mọi thứ tự thẻ × hướng xoay × vị trí; thành công khi tập miếng cơm
+   trùng đúng tập hình khay (chỉ tịnh tiến, không xoay miếng). */
+window.selfTest = function () {
+  const out = [];
+  for (let i = 0; i < LEVELS.length; i++) { loadLevel(i); out.push(`Lv.1-${i + 1}: ${solve() ? 'giải được' : 'KHÔNG giải được'}`); }
+  loadLevel(0); return out;
+};
+function solve() {
+  const rec = () => {
+    const left = hand.map((c, i) => i).filter(i => !hand[i].used);
+    if (!left.length) return fitsTrays();
+    for (const i of left) for (let r = 0; r < 4; r++) {
+      hand[i].rot = r;
+      for (let ox = -2; ox <= COLS + 1; ox++) for (let oy = -2; oy <= ROWS + 1; oy++) {
+        const res = evaluateCut(hand[i], ox, oy); if (!res.valid) continue;
+        const save = clone(foods); applyCut(res); history.pop(); hand[i].used = true;
+        if (rec()) return true;
+        foods = save; hand[i].used = false;
+      }
+    }
+    return false;
+  };
+  return rec();
+}
+function fitsTrays() {
+  const norm = tris => { const mx = Math.min(...tris.map(q => q[0])), my = Math.min(...tris.map(q => q[1]));
+    return tris.map(([x, y, t]) => key3(x - mx, y - my, t)).sort().join('|'); };
+  const a = trays.map(t => norm(t.tris)).sort(), b = foods.map(f => norm(f.tris)).sort();
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+</script>
+</body>
+</html>
